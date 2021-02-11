@@ -1,0 +1,47 @@
+#ifndef TORUS_HPP
+#define TORUS_HPP
+
+#include "surface.hpp"
+
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "../../math/nvector.hpp"
+#include "../../math/nmatrix.hpp"
+
+namespace geom {
+
+
+class Torus : public Surface
+{
+public:
+	enum class TYPE{TX, TY, TZ, TA};
+	Torus(const std::string &name, const math::Point &center, const math::Vector<3> &axis,
+		  double majorR, double minorVRadius, double minorHRadius);
+
+	// virtualの実装
+	std::string toInputString() const override;
+	std::unique_ptr<Surface> createReverse() const override;
+	std::string toString() const override;
+	void transform(const math::Matrix<4> &matrix) override;
+	bool isForward(const math::Point &p) const override;
+	math::Point getIntersection(const math::Point& point, const math::Vector<3>& direction) const override;
+
+    math::Vector<3> normal(const math::Point &pos) const;
+
+	static std::unique_ptr<Torus> createTorus(const std::string &name,
+	                                           const std::vector<double> &params,
+	                                           const math::Matrix<4> &trMatrix, TYPE type);
+
+private:
+	math::Point center_;  // トーラス中心
+	math::Vector<3> axis_; // トーラス軸方向
+	double R;  // 大半径
+	double a;  // 縦小半径
+	double b;  // 横小半径
+};
+
+
+}  // end namespace geom
+#endif // TORUS_HPP

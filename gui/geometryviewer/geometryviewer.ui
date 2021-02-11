@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GeometryViewer</class>
+ <widget class="QWidget" name="GeometryViewer">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>812</width>
+    <height>719</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout_3">
+   <item>
+    <widget class="QSplitter" name="splitter">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <widget class="QWidget" name="layoutWidget">
+      <layout class="QVBoxLayout" name="verticalLayout_5">
+       <item>
+        <widget class="QToolBox" name="toolBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="tmpPage">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>238</width>
+            <height>540</height>
+           </rect>
+          </property>
+          <attribute name="label">
+           <string>tmp</string>
+          </attribute>
+         </widget>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxAutoResolution">
+         <property name="text">
+          <string>Automatically set resolution</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBoxAutoDrawingVolume">
+         <property name="text">
+          <string>Automatically set drawing volume</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Preferred</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonUpdateView">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>
+ &amp;Draw 
+</string>
+           </property>
+           <property name="autoDefault">
+            <bool>true</bool>
+           </property>
+           <property name="default">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Preferred</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="layoutWidget11">
+      <layout class="QVBoxLayout" name="verticalLayoutForView">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QPushButton" name="pushButtonZPlusCamera">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to -Z&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_zplus.svg</normaloff>:/icon/svg/button_zplus.svg</iconset>
+           </property>
+           <property name="flat">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonZMinusCamera">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to +Z&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_zminus.svg</normaloff>:/icon/svg/button_zminus.svg</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>16</width>
+             <height>16</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonYPlusCamera">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to -Y&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_yplus.svg</normaloff>:/icon/svg/button_yplus.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonYMinusCamera">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to +Y&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_yminus.svg</normaloff>:/icon/svg/button_yminus.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonXPlusCamera">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to -X&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_xplus.svg</normaloff>:/icon/svg/button_xplus.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonXMinusCamera">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set view direction to +X&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_xminus.svg</normaloff>:/icon/svg/button_xminus.svg</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Line" name="line_2">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Line" name="line_3">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonShowGrid">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable/disable grid&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_showgrid.svg</normaloff>:/icon/svg/button_showgrid.svg</iconset>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonShowArrows">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable/disable axis arraows&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_showarrows.svg</normaloff>:/icon/svg/button_showarrows.svg</iconset>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonEnableCellPicker">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable/disable cell picker by mouse click&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_enablepicker.svg</normaloff>:/icon/svg/button_enablepicker.svg</iconset>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButtonEnableLegend">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enable/disable grid&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../resources/icon/icons.qrc">
+             <normaloff>:/icon/svg/button_enablelegend.svg</normaloff>:/icon/svg/button_enablelegend.svg</iconset>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+           <property name="checked">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>pushButtonUpdateView</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../resources/icon/icons.qrc"/>
+ </resources>
+ <connections>
+  <connection>
+   <sender>pushButtonUpdateView</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>saveCameraState()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>177</x>
+     <y>705</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>482</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonZPlusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setZPlusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>291</x>
+     <y>373</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>703</x>
+     <y>685</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonZMinusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setZMinusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>327</x>
+     <y>372</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>756</x>
+     <y>637</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonYPlusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setYPlusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>367</x>
+     <y>373</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>758</x>
+     <y>612</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonYMinusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setYMinusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>403</x>
+     <y>370</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>756</x>
+     <y>576</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonXPlusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setXPlusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>437</x>
+     <y>370</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>755</x>
+     <y>548</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonXMinusCamera</sender>
+   <signal>pressed()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>setXMinusCamera()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>471</x>
+     <y>370</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>754</x>
+     <y>511</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonUpdateView</sender>
+   <signal>released()</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>handleUpdateView()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>139</x>
+     <y>678</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>683</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonEnableLegend</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>GeometryViewer</receiver>
+   <slot>showMaterialLegend(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>654</x>
+     <y>365</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>803</x>
+     <y>434</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>restoreDefaultCheckData()</slot>
+  <slot>applySettings()</slot>
+  <slot>saveCameraState()</slot>
+  <slot>setZPlusCamera()</slot>
+  <slot>updateArrow()</slot>
+  <slot>setArrowStateChanged()</slot>
+  <slot>setZMinusCamera()</slot>
+  <slot>setYPlusCamera()</slot>
+  <slot>setYMinusCamera()</slot>
+  <slot>setXPlusCamera()</slot>
+  <slot>setXMinusCamera()</slot>
+  <slot>showCubeGrid(bool)</slot>
+  <slot>handleUpdateView()</slot>
+  <slot>showMaterialLegend(bool)</slot>
+ </slots>
+</ui>

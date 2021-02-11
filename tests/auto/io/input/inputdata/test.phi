@@ -1,0 +1,111 @@
+file=test.phi
+[Title]
+"Sample input for detector response calculation using isotropic source"
+
+ set: \
+ c1[0.662*cos(0)] \
+ c3[10*sin(100)]
+ set: c2[c1*56] c11[c1*c1]
+ set: c99[20]
+
+
+
+
+[Cell]
+ infl: {cells.phi}
+
+[Surface]
+infl:{surface.mcn}
+
+		 
+[transform]
+infl:{transform.mcn}
+
+
+
+[Source]
+s-type = 1
+proj = photon
+c e0 = 0.662
+c e-type = 2
+e0 = c1
+x0 = 0; y0 = 0
+z0 = 0; z1 = 20
+r0 = 20; r1 = 0
+dir = 1
+trcl = -90 40 0   0 0 -1  0 1 0  1 0 0
+reg = 991
+c * r-type = 2
+c * nr = 5; rmin = 0; rmax = 20
+c * a-type = -2
+c * na = 10; amin=0; amax=240;
+c * z-type = 1
+c * nz = &
+c *       5; 0  4  8  12  16  c99
+
+
+[Material]
+infl:{material.mcn}
+
+
+[t-point]
+   point = 5
+  x   y    z  r0
+  0   0    0   1
+ 10   0    0   1
+ 20   0    0   1
+ 30   0    0   1
+ 40   0    0   1
+ part =  photon
+ e-type = 3
+ emin = 1.e-5; emax = 10; ne = 60
+ axis = eng
+ file = point.out
+ epsout = 1
+
+[T-Track]
+mesh=xyz
+x-type=2
+  nx=300; xmin=-100; xmax=100
+y-type=2
+   ny=300; ymin=-100; ymax=100
+z-type=2
+   nz=1; zmin=-50; zmax=50   
+part=photon
+e-type=2
+   ne=1;  emin=0; emax=1
+unit=1
+axis=xy
+file=xysec.dat
+gshow = 3
+epsout = 1
+resol = 1
+
+
+
+[t-gshow]
+mesh = xyz
+x-type =  2
+nx =  1000;xmin = -100;xmax =  100
+y-type =  2
+ny =  1000;ymin = -100; ymax =  100
+z-type =  1
+nz =  1
+     -1.0 1.0
+axis = xy
+file = gshow.dat
+output = 6
+epsout = 1
+ginfo = 2
+
+[ P a r a m e t e r s ]
+ icntl    =           0     # (D=0) 3:ECH 5:NOR 6:SRC 7,8:GSH 11:DSH 12:DUMP
+ maxcas   =      1000     # (D=10) number of particles per one batch
+ maxbch   =           1     # (D=10) number of batches
+ emin(14) = 1.000000000E-03 # (D=1.d9) cut-off energy of photon (MeV)
+ dmax(14) =  1000.00000     # (D=emin(14)) data max. energy of photon (MeV)
+ ides     =           1     # (D=0) 0/1 photons will/not produce electrons
+ file(7)  = /home/code/mcnp/xs/xsdir #  nuclear data input file name
+ file(14) = /home/code/phits/trxcrd.dat #  photon data input file name
+[END]
+

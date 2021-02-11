@@ -1,0 +1,475 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>736</width>
+    <height>585</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralWidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QSplitter" name="splitter">
+      <property name="lineWidth">
+       <number>0</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="handleWidth">
+       <number>3</number>
+      </property>
+      <widget class="QWidget" name="layoutWidget">
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="VerticalTabWidget" name="tabWidget"/>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayoutLog">
+          <item>
+           <widget class="QLabel" name="labelLog">
+            <property name="text">
+             <string>Log: </string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBoxLogHide">
+            <property name="text">
+             <string>&amp;Hide</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButtonClearLog">
+            <property name="text">
+             <string>&amp;Clear</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QPlainTextEdit" name="plainTextEditForLog">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="undoRedoEnabled">
+        <bool>false</bool>
+       </property>
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
+       <property name="overwriteMode">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>736</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu_File">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="action_Open"/>
+    <addaction name="action_Reload"/>
+   </widget>
+   <widget class="QMenu" name="menu_Appearance">
+    <property name="title">
+     <string>&amp;Appearance</string>
+    </property>
+    <widget class="QMenu" name="menu_Theme">
+     <property name="title">
+      <string>&amp;Theme</string>
+     </property>
+     <addaction name="action_DefaultTheme"/>
+    </widget>
+    <widget class="QMenu" name="menu_Language">
+     <property name="title">
+      <string>&amp;Language</string>
+     </property>
+     <addaction name="action_DefaultLang"/>
+    </widget>
+    <widget class="QMenu" name="menuFont_size">
+     <property name="title">
+      <string>Font size</string>
+     </property>
+     <addaction name="actionFontExpand"/>
+     <addaction name="actionFontShrink"/>
+    </widget>
+    <addaction name="menu_Theme"/>
+    <addaction name="menu_Language"/>
+    <addaction name="menuFont_size"/>
+   </widget>
+   <widget class="QMenu" name="menu_Edit">
+    <property name="title">
+     <string>&amp;Edit</string>
+    </property>
+    <addaction name="actionSave"/>
+    <addaction name="actionReload"/>
+    <addaction name="actionUndo"/>
+    <addaction name="actionRedo"/>
+    <addaction name="actionCopy"/>
+    <addaction name="actionCut"/>
+    <addaction name="actionPaste"/>
+    <addaction name="actionFind"/>
+    <addaction name="actionCommentRegion"/>
+   </widget>
+   <widget class="QMenu" name="menu_Export">
+    <property name="title">
+     <string>E&amp;xport</string>
+    </property>
+    <widget class="QMenu" name="menu_Export3D">
+     <property name="title">
+      <string>&amp;3D graphics</string>
+     </property>
+     <addaction name="action_stl"/>
+     <addaction name="action_vtk"/>
+     <addaction name="action_vtp"/>
+     <addaction name="action_ply"/>
+    </widget>
+    <addaction name="menu_Export3D"/>
+    <addaction name="actionto_raster_graphics"/>
+    <addaction name="actionto_vector_graphics"/>
+    <addaction name="actionto_text_data"/>
+   </widget>
+   <widget class="QMenu" name="menu_Help">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+    <addaction name="action_Version"/>
+    <addaction name="action_License"/>
+    <addaction name="action_System_information"/>
+   </widget>
+   <widget class="QMenu" name="menu_Tools">
+    <property name="title">
+     <string>&amp;Tools</string>
+    </property>
+    <addaction name="action_Configuration"/>
+    <addaction name="actionSave_config_file"/>
+    <addaction name="actionLoad_config_file"/>
+   </widget>
+   <addaction name="menu_File"/>
+   <addaction name="menu_Edit"/>
+   <addaction name="menu_Export"/>
+   <addaction name="menu_Appearance"/>
+   <addaction name="menu_Tools"/>
+   <addaction name="menu_Help"/>
+  </widget>
+  <widget class="QStatusBar" name="statusBar"/>
+  <action name="action_Open">
+   <property name="text">
+    <string>&amp;Open</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+O</string>
+   </property>
+  </action>
+  <action name="action_Theme">
+   <property name="text">
+    <string>&amp;Theme</string>
+   </property>
+  </action>
+  <action name="action_Reload">
+   <property name="text">
+    <string>&amp;Reload</string>
+   </property>
+   <property name="toolTip">
+    <string>Reload current input file</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
+   </property>
+  </action>
+  <action name="actionVtp">
+   <property name="text">
+    <string>vtp</string>
+   </property>
+  </action>
+  <action name="actionStl">
+   <property name="text">
+    <string>stl</string>
+   </property>
+  </action>
+  <action name="actionPly">
+   <property name="text">
+    <string>ply</string>
+   </property>
+  </action>
+  <action name="actionVtk">
+   <property name="text">
+    <string>vtk</string>
+   </property>
+  </action>
+  <action name="actionPng">
+   <property name="text">
+    <string>png</string>
+   </property>
+  </action>
+  <action name="actionJpg">
+   <property name="text">
+    <string>jpg</string>
+   </property>
+  </action>
+  <action name="actionXpm">
+   <property name="text">
+    <string>xpm</string>
+   </property>
+  </action>
+  <action name="actionExport2D">
+   <property name="text">
+    <string>Export &amp;2D</string>
+   </property>
+  </action>
+  <action name="action_DefaultTheme">
+   <property name="text">
+    <string>&amp;Default</string>
+   </property>
+  </action>
+  <action name="action_DefaultLang">
+   <property name="text">
+    <string>English</string>
+   </property>
+  </action>
+  <action name="actionFontExpand">
+   <property name="text">
+    <string>Expand</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl++</string>
+   </property>
+  </action>
+  <action name="actionFontShrink">
+   <property name="text">
+    <string>Shrink</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+-</string>
+   </property>
+  </action>
+  <action name="actionUndo">
+   <property name="text">
+    <string>Undo              Ctrl+z</string>
+   </property>
+  </action>
+  <action name="actionRedo">
+   <property name="text">
+    <string>Redo              Ctrl+Shift+z</string>
+   </property>
+  </action>
+  <action name="actionCut">
+   <property name="text">
+    <string>Cut               Ctrl+x</string>
+   </property>
+  </action>
+  <action name="actionCopy">
+   <property name="text">
+    <string>Copy              Ctrl+c</string>
+   </property>
+  </action>
+  <action name="actionDelete">
+   <property name="text">
+    <string>Delete</string>
+   </property>
+  </action>
+  <action name="actionFind">
+   <property name="text">
+    <string>Find              Ctrl+f</string>
+   </property>
+  </action>
+  <action name="action_Version">
+   <property name="text">
+    <string>&amp;Version</string>
+   </property>
+  </action>
+  <action name="action_License">
+   <property name="text">
+    <string>&amp;License</string>
+   </property>
+  </action>
+  <action name="action_vtk">
+   <property name="text">
+    <string>vtk</string>
+   </property>
+  </action>
+  <action name="action_vtp">
+   <property name="text">
+    <string>vtp</string>
+   </property>
+  </action>
+  <action name="action_ply">
+   <property name="text">
+    <string>ply</string>
+   </property>
+  </action>
+  <action name="action_stl">
+   <property name="text">
+    <string>stl</string>
+   </property>
+  </action>
+  <action name="action_Export2D">
+   <property name="text">
+    <string>Export &amp;2D</string>
+   </property>
+  </action>
+  <action name="actionPaste">
+   <property name="text">
+    <string>Paste             Ctrl+v</string>
+   </property>
+  </action>
+  <action name="actionSave">
+   <property name="text">
+    <string>Save              Ctrl+s</string>
+   </property>
+  </action>
+  <action name="actionReload">
+   <property name="text">
+    <string>Reload            Ctrl+r</string>
+   </property>
+  </action>
+  <action name="action_ExportChart">
+   <property name="text">
+    <string>Export &amp;Chart</string>
+   </property>
+  </action>
+  <action name="actionto_vector_graphics">
+   <property name="text">
+    <string>2D &amp;vector graphics</string>
+   </property>
+  </action>
+  <action name="actionto_raster_graphics">
+   <property name="text">
+    <string>2D &amp;raster graphics</string>
+   </property>
+  </action>
+  <action name="actionto_text_data">
+   <property name="text">
+    <string>&amp;text data</string>
+   </property>
+  </action>
+  <action name="action_Configuration">
+   <property name="text">
+    <string>&amp;Configuration</string>
+   </property>
+  </action>
+  <action name="actionSave_config_file">
+   <property name="text">
+    <string>Save config file</string>
+   </property>
+  </action>
+  <action name="actionLoad_config_file">
+   <property name="text">
+    <string>Load config file</string>
+   </property>
+  </action>
+  <action name="action_System_information">
+   <property name="text">
+    <string>&amp;System information</string>
+   </property>
+  </action>
+  <action name="actionCommentRegion">
+   <property name="text">
+    <string>Comment/Uncomment Ctrl+/</string>
+   </property>
+  </action>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>VerticalTabWidget</class>
+   <extends>QTabWidget</extends>
+   <header>verticaltabwidget.hpp</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>pushButtonClearLog</sender>
+   <signal>clicked()</signal>
+   <receiver>plainTextEditForLog</receiver>
+   <slot>clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>172</x>
+     <y>92</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>177</x>
+     <y>254</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBoxLogHide</sender>
+   <signal>clicked(bool)</signal>
+   <receiver>plainTextEditForLog</receiver>
+   <slot>setHidden(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>58</x>
+     <y>78</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>62</x>
+     <y>128</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>hideLog(bool)</slot>
+ </slots>
+</ui>

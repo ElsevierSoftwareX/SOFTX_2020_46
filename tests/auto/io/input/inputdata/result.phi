@@ -1,0 +1,160 @@
+file=test.phi
+[title]
+"sample input for detector response calculation using isotropic source"
+
+set: c1[0.662*cos(0)] c3[10*sin(100)]
+set: c2[c1*56] c11[c1*c1]
+set: c99[20]
+
+
+
+
+[cell]
+1 1 -1.0e-1 1 -2 3 -4 5 -6
+9 5 -0.1 -9
+100 1 -1.0e-1 -11 -7 -999
+101 2 -1.0e-1 -11 +7 -8 -999
+103 3 -1.0e-1 -11 +7 8 -999
+104 3 -1.0e-1 -12
+105 4 -1.0e-1 -13 14
+106 5 -1.0e-1 -14 3 15
+107 7 -1.0e-1 -14 -3 15
+108 6 -1.0e-1 -15 3
+109 8 -1.0e-1 -15 #108
+990 4 -1.0 -999 (-1:2:(-3:4):-5:6) 11 12 8
+991 0 -999 (-1:2:-3:4:-5:6) 11 12 -8 13 9
+999 -1 999
+
+[surface]
+1 1 px -10
+2 1 px 20
+3 1 py -10
+4 1 py 10
+5 1 pz -10
+6 1 pz 10
+7 px 0
+8 p 1 1 0 100
+9 4 box -5 -5 -5 10 0 0 0 20 0 0 0 10
+11 2 cz 20
+12 3 so 20
+13 so 50
+14 so 40
+15 so 20
+999 so 100
+
+
+[transform]
+tr1 50 50 0 1 1 0 -1 1 0 0 0 1
+tr2 0 85 0 1 0 1 0 1 0 -1 0 1
+tr3 -50 -50 0
+tr4 -60 0 0 1 1 0 -1 1 0 0 0 1
+
+
+
+[source]
+s-type = 1
+proj = photon
+e0 = (0.662*cos(0))
+x0 = 0
+y0 = 0
+z0 = 0
+z1 = 20
+r0 = 20
+r1 = 0
+dir = 1
+trcl = -90 40 0 0 0 -1 0 1 0 1 0 0
+reg = 991
+c * r-type = 2
+c * nr = 5; rmin = 0; rmax = 20
+c * a-type = -2
+c * na = 10; amin=0; amax=240;
+c * z-type = 1
+c * nz = &
+c * 5; 0 4 8 12 16 (20)
+
+
+[material]
+m1 1000 1.0
+m2 1000 1.0
+m3 1000 1.0
+m4 1000 1.0
+m5 1000 1.0
+m6 1000 1.0
+m7 1000 1.0
+m8 1000 1.0
+
+
+[t-point]
+point = 5
+x y z r0
+0 0 0 1
+10 0 0 1
+20 0 0 1
+30 0 0 1
+40 0 0 1
+part = photon
+e-type = 3
+emin = 1.e-5
+emax = 10
+ne = 60
+axis = eng
+file = point.out
+epsout = 1
+
+[t-track]
+mesh=xyz
+x-type=2
+nx=300
+xmin=-100
+xmax=100
+y-type=2
+ny=300
+ymin=-100
+ymax=100
+z-type=2
+nz=1
+zmin=-50
+zmax=50
+part=photon
+e-type=2
+ne=1
+emin=0
+emax=1
+unit=1
+axis=xy
+file=xysec.dat
+gshow = 3
+epsout = 1
+resol = 1
+
+
+
+[t-gshow]
+mesh = xyz
+x-type = 2
+nx = 1000
+xmin = -100
+xmax = 100
+y-type = 2
+ny = 1000
+ymin = -100
+ymax = 100
+z-type = 1
+nz = 1 -1.0 1.0
+axis = xy
+file = gshow.dat
+output = 6
+epsout = 1
+ginfo = 2
+
+[ p a r a m e t e r s ]
+icntl = 0
+maxcas = 1000
+maxbch = 1
+emin(14) = 1.000000000e-03
+dmax(14) = 1000.00000
+ides = 1
+file(7) = /home/code/mcnp/xs/xsdir
+file(14) = /home/code/phits/trxcrd.dat
+[end]
+

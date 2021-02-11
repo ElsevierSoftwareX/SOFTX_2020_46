@@ -1,0 +1,207 @@
+#include "torus.hpp"
+
+#include "../../utils/message.hpp"
+#include "../../utils/numeric_utils.hpp"
+#include "../../math/equationsolver.hpp"
+
+
+
+geom::Torus::Torus(const std::string &name, const math::Point &center, const math::Vector<3> &axis,
+                   double majorR, double minorVRadius, double minorHRadius)
+    :Surface("TORUS", name), center_(center), axis_(axis.normalized()),
+      R(majorR), a(minorVRadius), b(minorHRadius)
+{
+	if(a <= 0) {
+		throw std::invalid_argument("Minor vertical radius of a torus should be positive");
+	} else if (b <= 0) {
+		throw std::invalid_argument("Minor horizontal radius of a torus should be positive");
+	} else if (R <= 0) {
+		throw std::invalid_argument("Major radius of a torus should be positive");
+	}
+}
+
+std::string geom::Torus::toInputString() const
+{
+	std::stringstream ss;
+	ss << name_ << " ta" << " " <<  center_.x() << " " << center_.y() << " " << center_.z()
+	   << axis_.x() << " " << axis_.y() << " " << axis_.z() << " " << R << " " << a << " " << b;
+	return ss.str();
+}
+
+std::unique_ptr<geom::Surface> geom::Torus::createReverse() const
+{
+	std::unique_ptr<Surface> rev(new Torus(Surface::reverseName(name_), center_, axis_, R, a, b));
+	rev->setID(ID_*-1);
+
+	return rev;
+}
+
+std::string geom::Torus::toString() const
+{
+	std::stringstream ss;
+	ss << Surface::toString() << ", center = " << center_ << " axis = " << axis_
+	   << " R = " << R << " a,b = " << a << "," << b;
+	return ss.str();
+}
+
+void geom::Torus::transform(const math::Matrix<4> &matrix)
+{
+	typedef math::Matrix<4> Mat;
+	if(matrix != Mat::ZERO()) {
+		// 中心をアフィン変換、軸ベクトルは回転変換大小半径は変換なし(直交変換だから)
+		math::affineTransform(&center_, matrix);
+		axis_ = axis_* matrix.rotationMatrix();
+	}
+}
+
+bool geom::Torus::isForward(const math::Point &p) const
+{
+//	double A = std::sqrt(a*a - b*b);
+//	double F = A*(Pn-Cn) - a*a;
+//	double term1 = 0.5*(P*P + A*A + C*C - R*R) + A*(Cn-Pn) - F*F/(2*a*a) - math::dotProd(center_, p);
+	double A2 = a*a - b*b;
+	double Cn = math::dotProd(center_, axis_);
+	double C  = center_.abs();
+	double Pn = math::dotProd(p, axis_);
+	double P  = p.abs();
+	double term1 = 0.5*(P*P + A2 + C*C - R*R) - math::dotProd(center_, p)  - (a*a*a*a + A2*(Pn-Cn)*(Pn-Cn))/(2*a*a) ;
+	term1 = (term1*term1)/(R*R*b*b);
+
+	double term2 = (Pn-Cn)*(Pn-Cn)/(a*a) -1;
+	return (reversed_) ? term1 + term2 < 0
+	                   : term1 + term2 >=0;
+}
+
+math::Point geom::Torus::getIntersection(const math::Point &point, const math::Vector<3> &direction) const
+{
+    assert(!utils::isSameDouble(direction.abs(), 0));
+	double a2 = a*a;
+	double b2 = b*b;
+	double A2 = a*a - b*b;
+	double A4 = A2*A2;
+	double C2 = math::dotProd(center_, center_);
+	double Dn = math::dotProd(direction, axis_);
+	double Dn2 = Dn*Dn;
+	double Dc = math::dotProd(direction, center_);
+	double Cn = math::dotProd(center_, axis_);
+	double Cn2 = Cn*Cn;
+	double Sn = math::dotProd(point, axis_);
+	double Sn2 = Sn*Sn;
+	double Sc = math::dotProd(point, center_);
+	double S2 = math::dotProd(point, point);
+	double Sd = math::dotProd(point, direction);
+	double R2 = R*R;
+
+	double c4 = (a2 - A2*Dn2)*(a2 - A2*Dn2);
+	double c3 = 4*(a*a - A2*Dn2)*(Sd*a2 - Dc*a2 - A2*Dn*Sn + A2*Cn*Dn);
+	double c2 = 4*Dn2*R2*a2*b2 - 2*a2*a2*a2
+	           + (4*Sd*Sd - 8*Dc*Sd - 4*Sc + 2*S2  - 2*R2 + 2*A2*Dn2 + 4*Dc*Dc + 2*C2 + 2*A2)*a2*a2
+	           + (-2*A2*Sn2 +(-8*A2*Dn*Sd + 8*A2*Dc*Dn + 4*A2*Cn)*Sn +8*A2*Cn*Dn*Sd + 4*A2*Dn2*Sc - 2*A2*Dn2*S2 + 2*A2*Dn2*R2
+	               +(-2*A2*C2 - 2*A4)*Dn2 - 8*A2*Cn*Dc*Dn - 2*A2*Cn2)*a2
+	           + 6*A4*Dn2*Sn2 - -12*A4*Cn*Dn2*Sn + 6*A4*Cn2*Dn2;
+	double c1 = (8*Dn*R2*Sn - 8*Cn*Dn*R2)*a2*b2 + (4*Dc - 4*Sd)*a2*a2*a2
+	           + (4*A2*Dn*Sn + (-8*Sc + 4*S2 - 4*R2 + 4*C2 + 4*A2)*Sd +8*Dc*Sc -4*Dc*S2 + 4*Dc*R2 - 4*A2*Cn*Dn + (-4*C2-4*A2)*Dc)*a2*a2
+	           + ( (4*A2*Dc-4*A2*Sd)*Sn2 + (8*A2*Cn*Sd + 8*A2*Dn*Sc - 4*A2*Dn*S2 + 4*A2*Dn*R2 + (-4*A2*C2-4*A2*A2)*Dn - 8*A2*Cn*Dc)*Sn
+	               -4*A2*Cn2*Sd - 8*A2*Cn*Dn*Sc + 4*A2*Cn*Dn*S2 - 4*A2*Cn*Dn*R2 +(4*A2*C2+4*A2*A2)*Cn*Dn + 4*A2*Cn2*Dc)*a2
+	           + 4*A4*Dn*Sn2*Sn - 12*A4*Cn*Dn*Sn2 + 12*A4*Cn2*Dn*Sn - 4*A4*Cn2*Cn*Dn;
+
+	double c0 = (-4*R2*a2*a2 + (4*R2*Sn2 - 8*Cn*R2*Sn + 4*Cn2*R2)*a2)*b2
+	           + a2*a2*a2*a2 + (4*Sc - 2*S2 + 2*R2 - 2*C2 - 2*A2)*a2*a2*a2
+	           + (2*A2*Sn2 - 4*A2*Cn*Sn + 4*Sc*Sc + (-4*S2 + 4*R2 - 4*C2 - 4*A2)*Sc + S2*S2
+	              + (-2*R2 +2*C2 +2*A2)*S2 +R2*R2 + (-2*C2-2*A2)*R2 + 2*A2*Cn2 + C2*C2 + 2*A2*C2 + A2*A2)*a2*a2
+	           + ( (4*A2*Sc - 2*A2*S2 + 2*A2*R2 - 2*A2*C2 - 2*A2*A2)*Sn2 + (-8*A2*Cn*Sc + 4*A2*Cn*S2 -4*A2*Cn*R2 + (4*A2*C2 + 4*A2*A2)*Cn)*Sn
+	               +4*A2*Cn2*Sc -2*A2*Cn2*S2 + 2*A2*Cn2*R2 + (-2*A2*C2 - 2*A2*A2)*Cn2)*a2
+	           + A4*Sn2*Sn2 - 4*A4*Cn*Sn2*Sn + 6*A4*Cn2*Sn2 - 4*A4*Cn2*Cn*Sn + A4*Cn2*Cn2;
+	mDebug() << "point=" << point << ", direction=" << direction;
+	mDebug() << "C4=" << c4 << "C3=" << c3 << "C2=" << c2 << "C1=" << c1 << "C0=" << c0;
+	auto sols = math::solve4thR(c4, c3, c2, c1, c0, false);
+	//auto sols = math::solve4thR(1, -398, 60993.5, -4257107.5, 1.137697640625E+8, false);
+
+	// 解のうち正で一番小さいものを選択する。
+	std::sort(sols.begin(), sols.end());
+	mDebug() << "sols=" << sols;
+	double t = -1;
+	for(size_t i = 0; i < sols.size(); ++i) {
+		if(sols.at(i) > 0) {
+			t = sols.at(i);
+			break;
+		}
+	}
+	if(t < 0) {
+		return math::Vector<3>::INVALID_VECTOR();
+	} else {
+		return point + t*direction;
+	}
+}
+
+
+math::Vector<3> geom::Torus::normal(const math::Point &pos) const
+{
+    double A2 = a*a - b*b;
+    double P2 = math::dotProd(pos, pos);
+    double C2 = math::dotProd(center_, center_);
+    double Cn = math::dotProd(center_, axis_);
+    double Pc = math::dotProd(pos, center_);
+    double Pn = math::dotProd(pos, axis_);
+
+    double factor1 = 2*a*a*(0.5*(A2 + P2 + C2 -R*R) - Pc - (a*a*a*a + A2*(Pn-Cn)*(Pn-Cn))/(2*a*a));
+    std::array<double, 3> xi{{pos.x(), pos.y(), pos.z()}};
+    std::array<double, 3> ci{{center_.x(), center_.y(), center_.z()}};
+    std::array<double, 3> ni{{axis_.x(), axis_.y(), axis_.z()}};
+    std::array<double, 3> grad;
+    for(size_t i = 0; i < 3; ++i) {
+        mDebug() << "xi=" << xi[i] << ", ci=" <<ci[i] << "ni=" << ni[i];
+        mDebug() << "factor1=" << factor1 << "term1="
+                 << factor1*(std::sqrt(pos.abs())*xi[i] - ci[i] + A2*(Cn-Pn)*ni[i]/(a*a))
+                 << "term2=" << 2*b*b*R*R*(Pn-Cn)*ni[i];
+        grad[i] = factor1*(std::sqrt(pos.abs())*xi[i] - ci[i] + A2*(Cn-Pn)*ni[i]/(a*a)) + 2*b*b*R*R*(Pn-Cn)*ni[i];
+    }
+    mDebug() << "normVec=" << math::Vector<3>(grad);
+	return math::Vector<3>(grad).normalized();
+}
+
+std::unique_ptr<geom::Torus>
+geom::Torus::createTorus(const std::string &name,
+                         const std::vector<double> &params,
+                         const math::Matrix<4> &trMatrix,
+                         geom::Torus::TYPE type)
+{
+	math::Point center, axis;
+	double majorR, minorVR, minorHR;
+	switch(type) {
+	case Torus::TYPE::TX:
+	case Torus::TYPE::TY:
+	case Torus::TYPE::TZ:
+		Surface::CheckParamSize(6, "T[XYZ]", params);
+		center = math::Point{params.at(0), params.at(1), params.at(2)};
+		majorR = params.at(3);
+		minorVR = params.at(4);
+		minorHR = params.at(5);
+		if(type == Torus::TYPE::TX) {
+			axis = math::Point{1, 0, 0};
+		} else if (type == Torus::TYPE::TY) {
+			axis = math::Point{0, 1, 0};
+		} else if (type == Torus::TYPE::TZ) {
+			axis = math::Point{0, 0, 1};
+		}
+		break;
+
+	case Torus::TYPE::TA:
+		Surface::CheckParamSize(9, "TA", params);
+		center = math::Point{params.at(0), params.at(1), params.at(2)};
+		axis = math::Point{params.at(3), params.at(4), params.at(5)};
+		majorR = params.at(6);
+		minorVR = params.at(7);
+		minorHR = params.at(8);
+		break;
+
+	default:
+		mFatal(std::string("torus.cpp:") + std::to_string(__LINE__))
+		        << " Invalid type";
+	}
+
+	std::unique_ptr<Torus> tor(new Torus(name, center, axis, majorR, minorVR, minorHR));
+	tor->transform(trMatrix);
+	return tor;
+}
+

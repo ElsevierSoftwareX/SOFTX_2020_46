@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FileTabItem</class>
+ <widget class="QWidget" name="FileTabItem">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>885</width>
+    <height>295</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QFrame" name="frame">
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Plain</enum>
+     </property>
+     <property name="lineWidth">
+      <number>0</number>
+     </property>
+     <layout class="QGridLayout" name="gridLayout">
+      <property name="leftMargin">
+       <number>1</number>
+      </property>
+      <property name="topMargin">
+       <number>1</number>
+      </property>
+      <property name="rightMargin">
+       <number>1</number>
+      </property>
+      <property name="bottomMargin">
+       <number>1</number>
+      </property>
+      <property name="verticalSpacing">
+       <number>5</number>
+      </property>
+      <item row="0" column="0" rowspan="2">
+       <layout class="QFormLayout" name="formLayout">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Find:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="lineEditSearch">
+          <property name="frame">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Replace with:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="lineEditReplace"/>
+        </item>
+       </layout>
+      </item>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QCheckBox" name="checkBoxCaseDpendent">
+          <property name="text">
+           <string>Case dependent</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="checkBoxWordUnit">
+          <property name="text">
+           <string>Whole word</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="checkBoxRegularExpression">
+          <property name="text">
+           <string>Regular expression</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>70</width>
+            <height>21</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonCloseSearch">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>20</width>
+            <height>20</height>
+           </size>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="1" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QPushButton" name="pushButtonUp">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="icon">
+           <iconset theme="QStyle::SP_TitleBarShadeButton">
+            <normaloff>.</normaloff>.</iconset>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonDown">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonReplace">
+          <property name="text">
+           <string>replace</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonReplaceAndSearch">
+          <property name="text">
+           <string>replace and search</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonReplaceAll">
+          <property name="text">
+           <string>replace all</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>67</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>lineEditSearch</tabstop>
+  <tabstop>lineEditReplace</tabstop>
+  <tabstop>pushButtonUp</tabstop>
+  <tabstop>pushButtonDown</tabstop>
+  <tabstop>checkBoxCaseDpendent</tabstop>
+  <tabstop>checkBoxWordUnit</tabstop>
+  <tabstop>pushButtonReplace</tabstop>
+  <tabstop>pushButtonReplaceAndSearch</tabstop>
+  <tabstop>pushButtonReplaceAll</tabstop>
+  <tabstop>pushButtonCloseSearch</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>pushButtonReplaceAll</sender>
+   <signal>pressed()</signal>
+   <receiver>FileTabItem</receiver>
+   <slot>replaceAllFoundWords()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>504</x>
+     <y>337</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>622</x>
+     <y>490</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonReplace</sender>
+   <signal>pressed()</signal>
+   <receiver>FileTabItem</receiver>
+   <slot>replaceFoundWord()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>274</x>
+     <y>338</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>409</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonReplaceAndSearch</sender>
+   <signal>pressed()</signal>
+   <receiver>FileTabItem</receiver>
+   <slot>replaceFoundWordAndSearch()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>405</x>
+     <y>345</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>388</x>
+     <y>502</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>reload()</slot>
+  <slot>save()</slot>
+  <slot>replaceFoundWord()</slot>
+  <slot>replaceFoundWordAndSearch()</slot>
+  <slot>replaceAllFoundWords()</slot>
+ </slots>
+</ui>

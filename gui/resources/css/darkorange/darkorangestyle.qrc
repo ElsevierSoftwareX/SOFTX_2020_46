@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/css/darkorange">
+        <file>images/checkbox.png</file>
+        <file>images/down_arrow.png</file>
+        <file>images/handle.png</file>
+        <file>style.qss</file>
+    </qresource>
+</RCC>

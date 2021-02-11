@@ -1,0 +1,346 @@
+#include "tetracreator.hpp"
+
+#include <algorithm>
+#include <fstream>
+#include <memory>
+#include <unordered_set>
+
+#include "surface/surfacemap.hpp"
+#include "surface/plane.hpp"
+#include "../input/cellcard.hpp"
+#include "../utils/message.hpp"
+#include "../utils/string_utils.hpp"
+#include "../utils/system_utils.hpp"
+
+namespace {
+
+const char COMMENT_CHAR = '#';
+const char NODEFILE_REFSITE[] = "http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual006.html#ff_node";
+const char ELEMFILE_REFSITE[] = "http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual006.html#ff_ele";
+const char PHITS_REFDOC[] = "https://phits.jaea.go.jp/manual/manualE-phits.pdf";
+}
+
+// TODO nodeファイルとかもinputViewerで開けるようにしたい。
+// FIXME tfile の指定は絶対パス？相対パス？両方OK? まあ両方OKなんだろうけど
+// FIXME tfileの引数が小文字化されていないか要チェック。されてる。
+
+// コンストラクタではとりあえずファイルのデータを読み込むに留める
+geom::TetraCreator::TetraCreator(const inp::CellCard &latticeCard)
+	: tsfac_(1.0), outerCellCard_(latticeCard), checkOuterCell_(true)
+{
+	// 1. パラメータ(tsfac, tfile, universe)の取得
+	if(outerCellCard_.parameters.find("tsfac") != outerCellCard_.parameters.end()){
+		tsfac_ = utils::stringTo<double>(outerCellCard_.parameters.at("tsfac"));
+	}
+	if(outerCellCard_.parameters.find("tfile") != outerCellCard_.parameters.end()) {
+		baseName_ = outerCellCard_.parameters.at("tfile");
+	} else {
+		mFatal(outerCellCard_.pos(), "tfile parameter is missing.");
+	}
+	if(outerCellCard_.parameters.find("u") != outerCellCard_.parameters.end()) {
+		auto univStr = outerCellCard_.parameters.at("u");
+		if(univStr.front() == '-') {
+			mWarning(outerCellCard_.pos()) << "Negative universe disable outer cell checking.";
+			universe_ = univStr.substr(1);
+		} else {
+			universe_ = univStr;
+		}
+	} else {
+		mFatal(outerCellCard_.pos(), "universe is missing in lattice cell card.");
+	}
+
+	std::string nodeFile = baseName_ + ".node";
+	std::ifstream nodeIfs(utils::utf8ToSystemEncoding(nodeFile).c_str());
+	if(nodeIfs.fail()) {
+			mFatal(outerCellCard_.pos(), "No such a node file =", nodeFile);
+	}
+	std::string elementFile = baseName_ + ".ele";
+	std::ifstream elementIfs(utils::utf8ToSystemEncoding(elementFile).c_str());
+	if(elementIfs.fail()) {
+		mFatal(outerCellCard_.pos(), "No such a element file =", elementFile);
+	}
+
+
+	std::string buff;
+	size_t line = 0;
+	// まずはnodeファイルから。
+	while(getline(nodeIfs, buff)) {
+		++line;
+		utils::trim(&buff);
+		utils::removeInlineComment(COMMENT_CHAR, &buff);
+		if(!buff.empty()) break;
+		if(nodeIfs.eof()) {
+			mFatal(outerCellCard_.pos(), "Unexpected EOF while reading header of the node file =", nodeFile);
+		}
+	}
+	const std::vector<std::string> nodeHeaderParams = utils::splitString(" ", buff, true);
+	const std::string nodeHeaderPos = nodeFile + ":" + std::to_string(line);
+	// ヘッダチェック
+	if(nodeHeaderParams.size() < 3) {
+		mFatal(nodeHeaderPos, "Invalid node file header found. Too few parameters(should be >3),",
+			   "header =", buff, "included from", outerCellCard_.pos(), "See ", NODEFILE_REFSITE);
+	} else if(utils::stringTo<int>(nodeHeaderParams.at(1)) != 3) {
+		mFatal(nodeHeaderPos, "Invalid node file header found. Only 3D is supported, actual="
+			   , nodeHeaderParams.at(1), "included from", outerCellCard_.pos(), "See ", NODEFILE_REFSITE);
+	}
+
+	while(getline(nodeIfs, buff)) {
+		++line;
+		utils::trim(&buff);
+		utils::removeInlineComment(COMMENT_CHAR, &buff);
+		if(buff.empty()) {
+			continue;
+		} else if(nodeIfs.eof()) {
+			mFatal(outerCellCard_.pos(), "Unexpected EOF while reading the node file =", nodeFile);
+		}
+
+		auto params = utils::splitString(" ", buff, true);
+		if(params.size() != 4) {
+			std::string errorPos = nodeFile + ":" + std::to_string(line);
+			mFatal(errorPos, "Number of data should be 4, actual =", params.size(),
+				   "data =", buff, "included from", outerCellCard_.pos());
+		}
+
+		// ここまで来てやっと正しいデータ
+		nodes_.emplace(std::make_pair(utils::stringTo<size_t>(params.at(0)),
+										 math::Point{tsfac_*utils::stringTo<double>(params.at(1)),
+													 tsfac_*utils::stringTo<double>(params.at(2)),
+													 tsfac_*utils::stringTo<double>(params.at(3))}));
+	}
+	const size_t numNodes = utils::stringTo<size_t>(nodeHeaderParams.at(0));
+	if(nodes_.size() != numNodes) {
+		mWarning(nodeHeaderPos) << "Number of nodes described in header(" << numNodes << ") and"
+							<< " existed in file(" << nodes_.size() << ") are different.";
+	}
+
+
+	// ここからやっとelementファイル
+	line = 0;
+	while(getline(elementIfs, buff)) {
+		++line;
+		utils::trim(&buff);
+		utils::removeInlineComment(COMMENT_CHAR, &buff);
+		if(elementIfs.eof()) {
+			mFatal(outerCellCard_.pos(), "Unexpected EOF while reading header of the element file =", elementFile);
+		} else  if(!buff.empty()) {
+			break;
+		}
+	}
+	auto elementHeaderParams = utils::splitString(" ", buff, true);
+	std::string elemHeaderErrorPos = elementFile + ":" + std::to_string(line);
+	if(elementHeaderParams.size() != 3) {
+		mFatal(elemHeaderErrorPos, "Number of input in element file header should be 3, actual =",
+			   elementHeaderParams.size(), "See ", ELEMFILE_REFSITE);
+	}
+
+	const int numVertexForAElement = utils::stringTo<int>(elementHeaderParams.at(1));
+	const int numAdditionalInfo = utils::stringTo<int>(elementHeaderParams.at(2));
+	if(numVertexForAElement != 4) {
+		mFatal(elemHeaderErrorPos, "Only 1st order of tetrahedra is supported.",
+			   "See ", PHITS_REFDOC, " and ", ELEMFILE_REFSITE);
+	} else if(numAdditionalInfo != 1) {
+		mWarning(elemHeaderErrorPos) << "Phits requires only 1 addiotnal parameter"
+									 << " in the element file, actual =" << numAdditionalInfo;
+	}
+
+	// ヘッダチェックが終わったので要素を読みに行く
+	while(getline(elementIfs, buff)) {
+		++line;
+		utils::trim(&buff);
+		utils::removeInlineComment(COMMENT_CHAR, &buff);
+
+		if(elementIfs.eof()) {
+			mFatal(outerCellCard_.pos(), "Unexpected EOF while reading elements from file =", elementFile);
+		} else if(buff.empty()) {
+			continue;
+		}
+
+		// チェック
+		auto elementParams = utils::splitString(" ", buff, true);
+		std::string elemErrorPos = elementFile + ":" + std::to_string(line);
+		size_t numParams = elementParams.size();
+		if(numParams < 6) {
+			mFatal(elemErrorPos, "Number of parameter for a element should be greater equal than 6 , actual =",
+				   elementParams.size());
+		} else if(numParams > 6) {
+			mWarning() << "Phits requires only 1 addional parameter."
+						<< numParams - 1 - numVertexForAElement << "are added.";
+		}
+
+		//size_t id = utils::stringTo<size_t>(elementParams.at(0));
+		size_t p1 = utils::stringTo<size_t>(elementParams.at(1));
+		size_t p2 = utils::stringTo<size_t>(elementParams.at(2));
+		size_t p3 = utils::stringTo<size_t>(elementParams.at(3));
+		size_t p4 = utils::stringTo<size_t>(elementParams.at(4));
+		// ここからやっとelement生成
+		elements_.emplace(std::make_pair(elementParams.at(0),
+										 std::make_pair(std::array<size_t, 4>{p1, p2, p3, p4},	elementParams.at(5))));
+	}
+
+	size_t numElements = utils::stringTo<size_t>(elementHeaderParams.at(0));
+	if(numElements != elements_.size()) {
+		mWarning(outerCellCard_.pos()) << "Number of elements in the header(" << numElements
+									<< ") and in the body(" << elements_.size() << ") are different.";
+	}
+}
+
+// 頂点IDから生成する面の名前を作る。
+std::string generatePlaneName(const std::string &base, size_t n1, size_t n2, size_t n3)
+{
+	return base + "_" + std::to_string(n1) + "," + std::to_string(n2) + "," + std::to_string(n3);
+}
+// ここから四面体要素の構築
+// 三角形要素を構築するためのnodeIDのトリオ。構築時に順序を保ったままnodeID最小のものがfirstに来るようにする。
+struct VertexTrio
+{
+	VertexTrio(){;}
+	VertexTrio(size_t id1, size_t id2, size_t id3)
+	{
+		setIDs(id1, id2, id3);
+	}
+
+	void setIDs(size_t id1, size_t id2, size_t id3)
+	{
+		// idに重複は無いものとする。
+		size_t min_id = std::min({id1, id2, id3});
+		if(id1 == min_id) {
+			first = id1;
+			second = id2;
+			third = id3;
+		} else if(id2 == min_id) {
+			first = id2;
+			second = id3;
+			third = id1;
+		} else {
+			first = id3;
+			second = id1;
+			third = id2;
+		}
+	}
+
+	size_t first;
+	size_t second;
+	size_t third;
+};
+
+// 重複をチェックしながら面を生成する。返り値は生成した面あるいはそれに等価な面
+std::string createAndRegisterSurfaces(const std::string &base,  // 平面のベース名
+									  size_t id0, size_t id1, size_t id2, // 面生成に使う頂点のID
+									  const std::unordered_map<std::size_t, math::Point> &nodes,  // 頂点IDをキーにして頂点を格納したマップ
+									  std::unordered_set<std::string> *createdSet,  // 生成された面の名前を保存
+									  std::unordered_set<std::string> *sharedSet,  // 四面体間で共有されている面の名前を追加する。
+									  geom::SurfaceMap *smap)  // 生成した面はsurfaceMapに追加する。生成しなければ追加しない
+{
+	VertexTrio trio(id0, id1, id2);
+	std::string name = generatePlaneName(base, trio.first, trio.second, trio.third);
+	std::string nameR = "-" + generatePlaneName(base, trio.first, trio.third, trio.second);
+
+	//mDebug() << "Creating surface =" << name << " checking creation of equivalent surface= " << nameR;
+	// すでに裏面として生成済みかチェックする。
+	if(createdSet->find(nameR) == createdSet->end()) {
+		// 他の面の裏面として生成済みでなければ新たに生成・追加する。
+		// equationを作成するのが楽なように要素内側を向くように生成する。
+		createdSet->emplace(name);
+		auto pl = std::make_shared<geom::Plane>(name, nodes.at(trio.first), nodes.at(trio.second),
+										  nodes.at(trio.third), geom::Plane::NormalType::ClockWise);
+		smap->registerSurface(pl->getID(), pl);
+		// 面は必ず表裏ペアで作成するので片方のみが生成済みということはない。
+		// 故にいま生成したpl面のウラ面が生成済みということはあり得ない。
+		assert(createdSet->find(generatePlaneName(base, trio.first, trio.third, trio.second)) == createdSet->end());
+		std::shared_ptr<geom::Surface> plr = pl->createReverse();
+		smap->registerSurface(plr->getID(), plr);
+		createdSet->emplace(plr->name());
+		//mDebug() << "surface=" << pl->name() << " and " << plr->name() << "was created.";
+		return name;
+	} else {
+		sharedSet->emplace(nameR);
+		sharedSet->emplace(nameR.substr(1));
+		return nameR;
+	}
+}
+
+std::vector<inp::CellCard> geom::TetraCreator::createTetrahedra(geom::SurfaceMap *smap, const std::string &selfUnivName)
+{
+	std::vector<inp::CellCard>  elemCards;
+	/*
+	 * 面を3点から生成する。名前の一意性を確保するため、
+	 * 3点p1p2p3のうち一番array中のindexが小さいものを一番左にする。つまり
+	 * (p1, p2, p3), (p2, p3, p1), (p3, p1, p2)で生成する面は全て等価であるが、名前は"p1p2p3"とする
+	 * また、"-p1p2p3"面(p1p2p3の裏面)と "p1p3p2"面も等価となるので重複生成しないように気をつける
+	 *
+	 * surface名を一意にするため名前は
+	 * "baseName_"_Tp1p2p3とする。
+	 */
+
+	// SurfaceMapの検索速度は微妙なのでここでは4面体専用の辞書に登録したsurface名を保存する。
+	std::unordered_set<std::string> createdSurfaces;
+	// 4面体の間で共用されている面 ＝ 連続四面体の外面に来ない面 を保存する。
+	std::unordered_set<std::string> sharedSurfaces;
+
+	std::string equation;
+
+	for(auto &elem: elements_) {
+		equation.clear();
+		const std::array<size_t, 4> &ph = elem.second.first;
+		const std::string &univ = elem.second.second;
+		// 要素作成時に未作成の面はとりあえず法線が要素の内向きになるよう反時計回りに生成する。
+		// Planeの法線はコンストラクタでどちら向きでも選べるがclockwiseが基本
+		equation = checkOuterCell_ ? outerCellCard_.equation : "";
+		// p0p3p1面
+		equation += " " + createAndRegisterSurfaces(baseName_, ph[0], ph[3], ph[1], nodes_,
+													&createdSurfaces, &sharedSurfaces, smap);
+		// p0p1p2面
+		equation += " " + createAndRegisterSurfaces(baseName_, ph[0], ph[1], ph[2], nodes_,
+													&createdSurfaces, &sharedSurfaces, smap);
+		// p0p2p3面
+		equation += " " + createAndRegisterSurfaces(baseName_, ph[0], ph[2], ph[3], nodes_,
+													&createdSurfaces, &sharedSurfaces, smap);
+		// p1p3p2面
+		equation += " " + createAndRegisterSurfaces(baseName_, ph[1], ph[3], ph[2], nodes_,
+													&createdSurfaces, &sharedSurfaces, smap);
+
+		// NOTE 四面体要素名は  tetGenファイル名_要素ID_<外側セル FIXME 既存セルとの重複を考えるなにか良い区切り文字を考えたい。
+		std::string elementName = baseName_ + "_" + elem.first + "<" + outerCellCard_.name;
+		elemCards.emplace_back(elementName,
+							   "0", 0.0,  // Material名と密度
+							   equation,  // 論理多項式
+							   "",         // like-butで依存している先のセル名
+							   inp::CellCard::map_type {{"fill", univ}, {"u", universe_}},     // パラメータ
+							   std::vector<std::string>(), // complimentで依存しているセル
+							   "");
+		//mDebug() << "Created card=" << elemCards.back().toString();
+	}  // 要素ループ終わり
+
+	std::string cellName = baseName_ + "_" + std::to_string(elements_.size()+1) + "<" +outerCellCard_.name;
+
+	mDebug() << "created=" << createdSurfaces;
+	mDebug() << "shared=" << sharedSurfaces;
+	equation = outerCellCard_.equation + " (";
+	bool isFirstSurface = true;
+	for(auto &surf: createdSurfaces) {
+		// 面は四面体内側を向くように作っているから、周囲セルは-surfaceのみをORでつなげれば良い
+		// 四面体内側の面は内向きとは限らないが、周囲セルの定義には使わない(sharedSurfaceに含まれている面は除く)
+		// のでこうりょする必要はない。
+		if(sharedSurfaces.find(surf) == sharedSurfaces.end() && surf.front() == '-') {
+			if(isFirstSurface) {
+				equation += surf;
+				isFirstSurface = false;
+			} else {
+				equation += ":" + surf;
+			}
+		}
+	}
+	equation += ")";
+
+	mDebug() << "Creating last cell==" << cellName;
+	elemCards.emplace_back(cellName,
+						   outerCellCard_.materialName, outerCellCard_.density, // Material名と密度
+						   equation,  // 論理多項式
+						   "",         // like-butで依存している先のセル名
+						   inp::CellCard::map_type {{"fill", selfUnivName}, {"u", universe_}},     // パラメータ
+						   std::vector<std::string>(), // complimentで依存しているセル
+						   "");
+	mDebug() << "End creating tetrahedra =" << elemCards.back().toString();
+
+	return elemCards;
+}

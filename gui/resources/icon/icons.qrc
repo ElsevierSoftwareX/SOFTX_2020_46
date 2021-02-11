@@ -1,0 +1,19 @@
+<RCC>
+    <qresource prefix="/icon">
+        <file>svg/2d.svg</file>
+        <file>svg/3d.svg</file>
+        <file>svg/xs.svg</file>
+        <file>svg/input.svg</file>
+        <file>svg/button_xminus.svg</file>
+        <file>svg/button_xplus.svg</file>
+        <file>svg/button_yminus.svg</file>
+        <file>svg/button_yplus.svg</file>
+        <file>svg/button_zminus.svg</file>
+        <file>svg/button_zplus.svg</file>
+        <file>svg/button_showgrid.svg</file>
+        <file>svg/button_showarrows.svg</file>
+        <file>svg/button_enablepicker.svg</file>
+        <file>svg/button_enablelegend.svg</file>
+    </qresource>
+    <qresource prefix="/"/>
+</RCC>

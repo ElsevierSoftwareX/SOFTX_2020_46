@@ -1,0 +1,16 @@
+"Sample input for detector response calculation using isotropic source"
+c 
+c READ FILE=cells.mcn
+READ FILE=  cells.mcn
+      READ FILE= comment.mcn
+c
+
+READ FILE=surface.mcn
+
+c DATA
+MODE P
+READ FILE=transform.mcn
+READ FILE=material.mcn
+SDEF PAR=2 ERG=0.662
+IMP:P 1 12r 0
+

@@ -1,0 +1,772 @@
+#include "geometryviewer.hpp"
+#include "ui_geometryviewer.h"
+
+#include <bitset>
+#include <cmath>
+#include <list>
+#include <limits>
+#include <memory>
+#include <string>
+#include <thread>
+
+
+#include <QCheckBox>
+#include <QDebug>
+#include <QDir>
+#include <QFileInfo>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QMouseEvent>
+#include <QProgressDialog>
+
+#include <QVTKWidget.h>
+#include <vtkAutoInit.h>
+VTK_MODULE_INIT(vtkRenderingOpenGL2);
+VTK_MODULE_INIT(vtkInteractionStyle);
+VTK_MODULE_INIT(vtkRenderingFreeType);
+//> VTK_MODULE_INIT(vtkInteractionStyle);
+//> VTK_MODULE_INIT(vtkRenderingFreeType);
+
+#include <vtkGenericDataArray.h>
+#include <QVTKOpenGLWidget.h>
+#include <vtkActor.h>
+#include <vtkAxesActor.h>
+#include <vtkBooleanOperationPolyDataFilter.h>
+#include <vtkCamera.h>
+#include <vtkContourFilter.h>
+#include <vtkDataWriter.h>
+#include <vtkFeatureEdges.h>
+#include <vtkGenericOpenGLRenderWindow.h>
+#include <vtkImplicitBoolean.h>
+#include <vtkPolyData.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkProperty.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkRenderWindow.h>
+#include <vtkSampleFunction.h>
+#include <vtkSphereSource.h>
+#include <vtkPlaneSource.h>
+#include <vtkSmartPointer.h>
+
+#include <vtkPLYWriter.h>
+#include <vtkPolyDataWriter.h>
+#include <vtkSTLWriter.h>
+#include <vtkXMLPolyDataWriter.h>
+
+
+
+#include "custamtablewidget.hpp"
+#include "namecomparefunc.hpp"
+#include "renderingworker.hpp"
+#include "../pkcore/geometry/geometry.hpp"
+#include "../pkcore/geometry/cell/cell.hpp"
+#include "../pkcore/utils/memory_utils.hpp"
+#include "../pkcore/utils/string_utils.hpp"
+
+namespace {
+const int CHK_SPACING_SIZE = 3;
+const int CHK_COL = 0;  // チェックボックスの列番号
+const int CELL_COL = 1; // セル名の列番号
+const double OFFSET_FACTOR = 1.01;  // 陰関数サンプリングレンジはboundinbboxより少し大きくする
+CameraInfo DEFAULT_CAMERA = CameraInfo(std::array<double, 9>{0, 0, 300, 0, 0, 0, 0, 1, 0});
+const int SAMPLE_ELEMENT_SIZE_BYTE = 8;  // vtkで陰関数をサンプリングする時の返り値のデータサイズ
+
+const int DEFAULT_RATE_COARSE = 3;
+}
+
+
+GeometryViewer::GeometryViewer(QWidget *parent, const QString &tabText)
+	: TabItem(parent, tabText), ui(new Ui::GeometryViewer), currentSamplingRate_(50), isFirstCall_(true)
+{
+	ui->setupUi(this);
+
+	// 謎：QVTKOpenGLWidgetをsmartポインタで生成すると表示されない。
+	// auto qvtkWidget = QSharedPointer<QVTKOpenGLWidget>(new QVTKOpenGLWidget); 表示されない
+	// auto qvtkWidget = std::make_shared<QVTKOpenGLWidget>(); //これも表示されない
+	// ここでparentを指定するとexpandingをセットしても初期サイズが広がらない
+	qvtkWidget_ = new QVTKOpenGLWidget();
+	qvtkWidget_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	// //ui->verticalLayoutView->addWidget(qvtkWidget_);
+	//ui->splitter->addWidget(qvtkWidget_);
+	ui->verticalLayoutForView->addWidget(qvtkWidget_);
+
+	auto layout = new QHBoxLayout;
+	ui->verticalLayoutForView->addLayout(layout);
+	ui->splitter->setOpaqueResize(false);
+
+	currentRenderer_ = vtkSmartPointer<vtkRenderer>::New();
+	axesActor_ = vtkSmartPointer<vtkAxesActor>::New();
+
+	// GUI widget調整
+	// toolBox
+	ui->toolBox->setCurrentIndex(0);
+	// Toolbox page 1 Cell選択
+	connect(ui->pushButtonCheckAll, &QPushButton::pressed, ui->tableWidget, [this](){this->ui->tableWidget->setAllCheckBox(true);});
+	connect(ui->pushButtonCheckNone, &QPushButton::pressed, ui->tableWidget, [this](){this->ui->tableWidget->setAllCheckBox(false);});
+	connect(ui->pushButtonRestoreDefaultCheck, &QPushButton::pressed, ui->tableWidget, &CustamTableWidget::restoreDefaultCheckData);
+	ui->tableWidget->horizontalHeader()->setStretchLastSection(true);
+	ui->tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+	// toolbox page2 Setting
+	ui->spinBoxRateMagnification->setValue(DEFAULT_RATE_COARSE);
+    ui->horizontalSliderRate->setValue(ui->spinBoxSampling->value());
+	ui->spinBoxSampling->setValue(currentSamplingRate_);
+	this->setEnableArrowConfig(ui->checkBoxShowAxisArrow->isChecked());
+	this->getRenderingRangeInput(false, &currentSamplingRange_);
+	auxPlaneInfo_ = this->getAuxPlaneInfo();
+	// # arrow
+	connect(ui->checkBoxShowAxisArrow, &QCheckBox::stateChanged, this, &GeometryViewer::updateArrow);
+	// arrowを表示しないなら関連widgetは全てdisableする。
+	connect(ui->checkBoxShowAxisArrow, &QCheckBox::toggled, this, &GeometryViewer::setEnableArrowConfig);
+	// arrowをレンダリング領域にフィットさせる場合はdoublespinboxは無効化する
+	ui->doubleSpinBoxArrowLength->setDisabled(ui->checkBoxFitArrowToRenderingRegion->isChecked());
+
+	// その他描画widget
+	auto renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
+    qvtkWidget_->SetRenderWindow(renderWindow);
+    // VTK Renderer
+    // AddViewPropとAddActorは同じ。AddAcrorは後方互換製のため設けられている模様。
+    currentRenderer_ = vtkSmartPointer<vtkRenderer>::New();
+    qvtkWidget_->GetRenderWindow()->AddRenderer(currentRenderer_);
+    //cameraInfo_ = CameraInfo::getFromCamera(currentRenderer_->GetActiveCamera());
+}
+
+
+GeometryViewer::~GeometryViewer()
+{
+	delete ui;
+    delete qvtkWidget_;
+}
+
+
+void GeometryViewer::init()
+{
+	if(hasInitialized_) return;
+	int w = this->size().width();
+	const double ratio = 0.3;
+	int infoWidth = std::max(static_cast<int>(std::round(w*ratio)), 40*QFontMetrics(QFont()).width('0'));
+	ui->splitter->setSizes(QList<int>{infoWidth, w - infoWidth});
+	// progressbarの高さはテキストと揃えないと出現・消失に従ってvtk領域が微妙に変化してしまう
+	TabItem::init();
+
+//	QTimer::singleShot(100, [=](){
+//		for(size_t i =0; i < 100000; ++i) {
+//			this->updateView();
+//			currentSamplingRate_ += (i%2 == 0) ? 1 : -1;
+//		}
+	//	});
+}
+
+void GeometryViewer::retranslate()
+{
+	ui->retranslateUi(this);
+}
+
+
+void GeometryViewer::exportTo(ff::FORMAT3D fformat) {
+	QString dirName = QFileDialog::getExistingDirectory(this, tr("Select exporting directory"));
+	if(dirName.isNull()) {
+		return;
+	} else if (dirName.isEmpty()) {
+		dirName = ".";
+	}
+	QDir dir(dirName);
+	QProgressDialog progress(tr("Exporting cells to files..."), tr("Cancel"), 0, displayedCellNames_.size(), this);
+	progress.setWindowModality(Qt::WindowModal);
+	// actor→mapper→入力データ の順に取得する
+	int i = 0;
+	for(auto &cellName: displayedCellNames_) {
+		progress.setValue(i++);
+		QApplication::processEvents();
+		if(progress.wasCanceled()) break;
+		QFileInfo finfo(dir, QString::fromStdString(cellName));
+		auto polyData = vtkPolyData::SafeDownCast(actorMap_.at(cellName).first->GetMapper()->GetInput());		
+#if defined(_WIN32) || defined(_WIN64)  // windoesの場合はなぜか拡張子が追加されない
+		std::string filename = finfo.absoluteFilePath().toStdString() + "."  + ff::getFormat3DSuffix(fformat);
+		ff::exportFile(fformat, utils::toSystemEncodedString(filename), polyData, true);
+#endif
+		ff::exportFile(fformat, utils::toSystemEncodedString(finfo.absoluteFilePath().toStdString()), polyData, true);
+	}
+}
+
+
+
+
+
+// 外部からジオメトリデータを受け取った時の処理スロット
+void GeometryViewer::updateSimulationData(std::shared_ptr<const Simulation> sim)
+{
+	this->clear();
+	if(!sim) return;
+
+	simulation_ = sim;
+	std::list<std::string> cellNameList;  // セル一覧チェックボックスを作るためのセル名リスト
+	// 陰関数とboundingboxは不変なのでデータ受信時に生成しておく。
+	for(auto &cellPair: simulation_->getGeometry()->cells()) {
+		functionMap_[cellPair.first] = cellPair.second->createImplicitFunction();
+		bbMap_[cellPair.first] = cellPair.second->createBoundingBox();
+		cellNameList.emplace_back(cellPair.first);
+	}
+	//cellNameList.sort();
+	cellNameList.sort(&cellNameLess);
+
+	for(int i = 0; i < ui->tableWidget->rowCount(); i++) ui->tableWidget->removeRow(0);
+	ui->tableWidget->setRowCount(static_cast<int>(cellNameList.size()));
+
+	// とりえあずセルリストをlistviewとチェックボックスをtableViewに表示する。
+	int rowNum = -1;
+	for(auto it = cellNameList.cbegin(); it != cellNameList.cend(); ++it) {
+		++rowNum;
+		// ### cell名の表示列作成
+		std::string cellName = *it;
+		// setItemすると以後のQTableWidgetItemのdeleteはTableWidgetが行う。
+		auto *cellNameItem = new QTableWidgetItem(QString::fromStdString(cellName));
+		//ui->tableWidget->registerCellName
+		ui->tableWidget->setCellNameItem(rowNum, cellNameItem);
+
+
+		// ### チェックボックス列の作成
+		// checkbox列。ここでチェックボックスがクリックされた場合、何行目かわかるようにする。
+		auto box = new QCheckBox;
+		connect(box, &QCheckBox::toggled, [this, rowNum](bool checked){
+												this->registerCheckChangedCell(checked, rowNum);
+											});
+		// importanceが0以下、あるいはdensityが0のセルはデフォルトでは表示しない設定
+		//mDebug() << "geometryViewer::cellName=" << cellName << "density=" << simulation_->getGeometry()->cells().at(cellName)->density();
+		bool doChecked = (simulation_->getGeometry()->cells().at(cellName)->importance() <= 0
+						  || std::abs(simulation_->getGeometry()->cells().at(cellName)->density()) <= 1e-10) ? false : true;
+		box->setChecked(doChecked);
+		ui->tableWidget->setCellCheckWidget(rowNum, box);
+	}
+	// 幅を調節
+	for(auto i = 0; i < std::max(CHK_COL,CELL_COL); ++i) {
+		ui->tableWidget->resizeColumnToContents(i);
+	}
+	// とりあえず描画しておく
+	//this->updateView();
+}
+
+
+
+void GeometryViewer::registerCheckChangedCell(bool checked, int rowNum)
+{
+	QString  qcellName = ui->tableWidget->item(rowNum, CELL_COL)->text();
+	std::string cellName = qcellName.toStdString();
+	if(checked) {
+		removingCellNames_.erase(cellName);
+		addingCellNames_.insert(cellName);
+	} else {
+		removingCellNames_.insert(cellName);
+		addingCellNames_.erase(cellName);
+	}
+}
+
+bool GeometryViewer::getRenderingRangeInput(bool doWarnByMessageBox, std::array<double, 6> *rangeArray)
+{
+	bool valueOk, ok = true;
+	double xmax = ui->lineEditRenderringRegionXmax->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	double xmin = ui->lineEditRenderringRegionXmin->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	double ymax = ui->lineEditRenderringRegionYmax->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	double ymin = ui->lineEditRenderringRegionYmin->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	double zmax = ui->lineEditRenderringRegionZmax->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	double zmin = ui->lineEditRenderringRegionZmin->text().toDouble(&valueOk);
+	ok = ok && valueOk;
+	if(!ok) {
+		if(doWarnByMessageBox) QMessageBox::warning(this, tr("Warning"), tr("Input for rendering region is invalid"));
+		*rangeArray = std::array<double, 6>{0, 0, 0, 0, 0, 0};
+		return false;
+	} else {
+		(*rangeArray)[0] = xmin;
+		(*rangeArray)[1] = xmax;
+		(*rangeArray)[2] = ymin;
+		(*rangeArray)[3] = ymax;
+		(*rangeArray)[4] = zmin;
+		(*rangeArray)[5] = zmax;
+		return true;
+	}
+}
+
+AuxPlaneInfo GeometryViewer::getAuxPlaneInfo() const
+{
+	auto func = [](QRadioButton *b1, QRadioButton* b2) {
+		if(b1->isChecked()){
+			return 1;
+		} else if(b2->isChecked()) {
+			return -1;
+		} else {
+			return 0;
+		}
+	};
+
+	int cutx = func(ui->radioButtonXplaneCutPlus, ui->radioButtonXplaneCutMinus);
+	int cuty = func(ui->radioButtonYplaneCutPlus, ui->radioButtonYplaneCutMinus);
+	int cutz = func(ui->radioButtonZplaneCutPlus, ui->radioButtonZplaneCutMinus);
+
+	return AuxPlaneInfo(
+		PlaneInfo (ui->checkBoxAuxXplane->isChecked(), ui->lineEditAuxXplanePos->text().toDouble(), cutx),
+		PlaneInfo (ui->checkBoxAuxYplane->isChecked(), ui->lineEditAuxYplanePos->text().toDouble(), cuty),
+		PlaneInfo (ui->checkBoxAuxZplane->isChecked(), ui->lineEditAuxZplanePos->text().toDouble(), cutz)
+				);
+}
+
+
+void GeometryViewer::clear()
+{
+	// 全アクター削除
+	auto actors = currentRenderer_->GetActors();
+	actors->InitTraversal();
+	int numActors = actors->GetNumberOfItems();
+	for(vtkIdType i = 0; i < numActors; i++){
+		currentRenderer_->RemoveActor(actors->GetNextActor());
+	}
+
+	simulation_.reset();
+	ui->tableWidget->clear();
+	removingCellNames_.clear();
+	addingCellNames_.clear();
+	actorMap_.clear();
+	functionMap_.clear();
+	bbMap_.clear();
+	cameraInfo_.clear();
+	auxPlaneInfo_.clear();
+
+	//初期化
+	//currentSamplingRate_;
+	axesActor_ = vtkSmartPointer<vtkAxesActor>::New();
+	this->getRenderingRangeInput(false, &currentSamplingRange_);
+	ui->spinBoxRateMagnification->setValue(DEFAULT_RATE_COARSE);
+	currentRenderer_ = vtkSmartPointer<vtkRenderer>::New();
+	qvtkWidget_->GetRenderWindow()->AddRenderer(currentRenderer_);
+	isFirstCall_ = true;
+}
+
+
+
+
+/*
+ * 最初にupdateViewを実行する時は既にactiveカメラは生成済みではあるが、
+ * デフォルトのpos=1,0,0とかそんな値が入っている。
+ * よて最初は自動調整データをつかい、
+ * あとはupdateButtonを押した時に保存したcameraInfoを設定する。
+ */
+#include <vtkSphere.h>
+#include <vtkPlane.h>
+void GeometryViewer::updateView()
+{
+	// 更新すべき情報を調べて、viewを更新する。
+
+	/*
+	 * ジオメトリ情報の変化は
+	 * 1．可視セルの追加
+	 * 2．可視セルの削除
+	 * 3．サンプリングレートの変更
+	 * 4．レンダリング領域の変更
+	 *
+	 * で発生する。
+	 * 1．2．については現在セルリストとui中のセルリストを比較して差分を検知
+	 * 3．については現在サンプリングレートとui中のサンプリングレートを比較して検知する。
+	 * 問答無用で更新すると効率が悪すぎる。
+	 * 但し、セルリスト比較コストも割と高いと思われるのでisGeometryChanged_をチェックする。
+	 *
+	 */
+	// 変更チェック
+	// サンプリングレート
+	bool samplingRateChanged = false;
+	if(currentSamplingRate_ != ui->spinBoxSampling->value()*ui->spinBoxRateMagnification->value()) {
+		currentSamplingRate_ = ui->spinBoxSampling->value()*ui->spinBoxRateMagnification->value();
+		samplingRateChanged = true;
+	}
+	// sampling領域
+	bool samplingRangeChanged = false;
+	decltype(currentSamplingRange_) newRange;
+	if(!getRenderingRangeInput(true, &newRange)) return;  // rangeが読み取れなかったら更新せずreturn
+	for(size_t i = 0; i < currentSamplingRange_.size(); ++i) {
+		samplingRangeChanged = samplingRangeChanged || (std::abs(currentSamplingRange_[i] - newRange[i]) > math::EPS);
+	}
+	currentSamplingRange_.swap(newRange);
+
+	// 補助平面の変更チェック
+	auto newPlaneInfo = this->getAuxPlaneInfo();
+	bool auxPlaneInfoChanged = false;
+	if(auxPlaneInfo_ != newPlaneInfo) {
+		auxPlaneInfoChanged = true;
+		auxPlaneInfo_.swap(newPlaneInfo);
+	}
+
+	// samplingRate、samplingRangeあるいはauxPlaneに変更があった場合、または初回呼び出しは問答無用で全チェック付きセル更新
+	if(samplingRateChanged || isFirstCall_ || samplingRangeChanged || auxPlaneInfoChanged) {
+	// 初回あるいは全セル更新の場合
+		removingCellNames_.clear();
+		addingCellNames_.clear();
+		for(int i = 0; i < ui->tableWidget->rowCount(); ++i) {
+			auto widget = ui->tableWidget->cellWidget(i, CHK_COL);
+			QCheckBox* box = qobject_cast<QCheckBox*>(widget->layout()->itemAt(1)->widget());
+			std::string cellName;
+			if(box->isChecked()) {
+				addingCellNames_.insert(ui->tableWidget->item(i, CELL_COL)->text().toStdString());
+			}
+		}
+		// 全アクター削除
+		displayedCellNames_.clear();
+		actorMap_.clear();
+		auto actors = currentRenderer_->GetActors();// vtkRenderer
+		actors->InitTraversal();
+		int numActors = actors->GetNumberOfItems();
+		//mDebug() << "Deleteing number of actors=" << numActors;
+		for(vtkIdType i = 0; i < numActors; i++){
+			currentRenderer_->RemoveActor(actors->GetNextActor());
+		}
+	} else {
+	// 部分更新の場合
+		// adding, removing セルどちらもアクター更新するのでrendererからアクターを削除する。
+		// そしてremovingはその後追加しない
+		// また、ここではactorMapのactor自体は削除しない。(サンプルレート不変で再追加された時再利用するため)
+		for(auto &cellName: addingCellNames_) {
+			mDebug() << "addingCell =" << cellName;
+			if(actorMap_.find(cellName) != actorMap_.end()){
+				currentRenderer_->RemoveActor(actorMap_.at(cellName).first);
+				if(displayedCellNames_.find(cellName) != displayedCellNames_.end())
+					displayedCellNames_.erase(displayedCellNames_.find(cellName));
+			}
+		}
+		for(auto &cellName: removingCellNames_) {
+			mDebug() << "removingCell = " << cellName;
+			if(actorMap_.find(cellName) != actorMap_.end()){
+				currentRenderer_->RemoveActor(actorMap_.at(cellName).first);
+				if(displayedCellNames_.find(cellName) != displayedCellNames_.end())
+					displayedCellNames_.erase(displayedCellNames_.find(cellName));
+			}
+		}
+	}
+
+
+	mDebug() << "陰関数サンプリング開始";
+	int numRenderedCell = 0;
+	double rate = 0.01*currentSamplingRate_;
+
+	QProgressDialog progress(tr("Rendering polygons..."), tr("Cancelll"), 0, addingCellNames_.size(), this);
+	progress.setWindowModality(Qt::WindowModal);
+	QApplication::processEvents();
+
+	// TODO ここのループを並列化
+	/*
+	 * 共有メモリならとりあえず途中で使う変数は全てスマートポインタで確保しておけば
+	 * 最終結果のactorをシャローコピーするだけでOK。
+	 * 分散メモリ環境でどうするかという問題にはなる。ディープコピー・シリアライズが必要になる。
+	 * vtkPolylDataの時点くらいしかDeepコピーはできなさそう。
+	 * 将来的なMPI並列化の可能性を考えるとvtkPolyData作成のところでjoinするのがよさそう。
+	 * Deepコピーできたからといって簡単にシリアライズできるわけではない。もちろん。
+	 * メンバポインタの指示先を含めた全体をシリアライズするというよりは、
+	 * コンストラクタに必要なデータを送るようにしたほうが良さそう。つまり頂点と位相情報を送れば良い。
+	 *
+	 *
+	 *  QFuture<std::tuple<std::string, vtkSmartPointer<vtkPolyData>, double>> results = QtConcurrent::mapped(addingCellNames_, RenderingWorker(counter));
+	 * std::tuple<std::string, vtkSmartPointer<vtkPolyData>, double> RenderingWorker::operator(std::string)
+	 * 進捗はatomic_intを共有、インクリメントしてprogressに表示
+	 */
+
+	for(auto it = addingCellNames_.begin(); it != addingCellNames_.end(); ++it){
+		std::string cellName = *it;
+		QApplication::processEvents();
+		//
+
+		// この時点で更新対象actorはrendererから削除されているがactorMap_にはまだ残っている場合がある。
+		// よってsamplerateが変わっていなければ追加する。
+		vtkSmartPointer<vtkActor> targetActor;
+		if(actorMap_.find(cellName) != actorMap_.end() && actorMap_.at(cellName).second == rate) {
+			targetActor = actorMap_.at(cellName).first;
+		} else {
+
+			/* ただここで時間がかかっているのはsample->Update関数なので、
+			 updateViewのループ内にQApplication::processEvents()を入れても改善せず、
+			 マルチスレッドするしか無い。しかもGUIにまで制御が戻るには
+			 updateView関数を抜ける必要がある。つまり画面描画まで別スレッドで実行するか、
+			 sample終了後にsignalを飛ばす必要がある。*/
+
+			/*
+			 * C++11には(プログラム終了無しで)動いているthreadを止めたり破棄したりする方法は無いので
+			 * condition variableなどをループ中に監視してthread内から終了させるしかない。
+			 * SampleFunction::Update()等に手を入れるという選択肢は事実上ないのでC++11では並列実行/停止不可。
+			 *
+			 * QProcessで別プロセスにしてしまうべし。それならリソースリークの問題もないし、
+			 * 簡単にkillできる。但しプロセス間通信をする必要がある。
+			 * QProcessのプロセス間通信では QSharedMemoryにしろQIODeviceにしろ、
+			 * 結局QBuffer(≒QByteArray)でデータを受けることになるので
+			 * pointerを含まないByte列に変換できるクラス以外は受け渡しできない。つまり、
+			 * ・スマポ受け渡しではなく、スマポの指示する先を渡す必要がある(DeepCopy)。
+			 * ・Byte列として通信するのでシリアライズできるクラスである必要がある。サイズも取得できないと駄目
+			 *
+			 * 共有できるか？ vtkPolyDataWriterでvtkPolyDataは容易にシリアライズ可能
+			 * ・vtkPolyData： vtkPolyDataWriterでいけるんじゃね？
+			 *    vtkPolyDataWriter::SetInputData(vtkDataObject*)と
+			 *		vtkPolyDataWriter::Write()でVTK形式に変換可能(SetFileName(const char*)後に)。あるいは
+			 *		char* vtkDataWriter::GetOutputString()で文字列にしても良い(WriteToOutputStringOn()後に)
+			 *    あとはvtkPolyDataReaderで読み取ればいい。
+			 *		SetInputString(const char*)/SetFileName(const char*)
+			 *		Update; vtkPolyDataReader::GetOutput()
+			 *  .vtpファイルならvtkXMLPolyDataWriterを使う
+			 *
+			 * PolyData生成は
+			 *	geom::Cell → vtkImplicitFunction → vtkSampleFunction → vtkContourFilter → vtkPolyData
+			 * このうち最低限「SampleFunction→ContourFilter→PolyData」の部分を別プロセスで実施する。
+			 * 故にvtkImplicitFunctionかgeom::Cellをシリアライズする必要がある。
+			 *
+			 * vtkImplicitFunctionのシリアライズはかなり面倒。
+			 * ・Pure virtualなので実体はvtkSphereやvtkImplicitBooleanだったりする。
+			 *		適切にdowncastしてその先をシリアライズとか無理。(何種類のクラスをシリアライズする必要があるか…)
+			 *
+			 * Cellもスマポメンバーを持つのでシリアライズが結構面倒くさい
+			 * ・セルごとに大きさの異なるSurfaceMapを持っているので、最低限Surface Mapのシリアライズが必要になる
+			 *		・SurfaceMapの保持するSurfaceもシリアライズする必要がある。
+			 *
+			 * Boostのシリアライザでも使うか？
+			 * https://img.atwikiimg.com/www31.atwiki.jp/lafe/pub/boost_serialization/boost_serialization.html
+			 *
+			 *
+			 * 1．セル送るとか面倒なのでむしろgeometry入力全部送ってしまって子プロセスでもGeometry作成する。
+			 * 2．必要に応じて親プロセスからsamplingrateやBBを送る
+			 * 3．PolyDataを受け取る。
+			 * 4．以下2.3.の繰り返し
+			 *
+			 * キャンセルごとにGeometry再構築が必要になるがそれくらいは仕方ない。
+			 * しかし、GPGPUでvtkPolyData生成できれば飛躍的に速いはず。
+			 */
+
+			/*
+			 * サンプリング密度は一定にしたい。
+			 * そうでないと大きいものと小さいものの境目での不整合が目立ってしまう。
+			 * あまりにも巨大なセルは少し密度を落としたい。
+			 */
+			geom::BoundingBox bb = bbMap_.at(cellName);
+			mDebug() << "For cell " << *it << ", calculated BB =" << bb.toRangeString();
+
+			// AABBは最後にモデル境界の直方体とANDを取って切り取る
+			bb = geom::BoundingBox::AND(bb, geom::BoundingBox(currentSamplingRange_));
+			// さらに補助平面でカットする
+			bb = geom::BoundingBox::AND(bb, auxPlaneInfo_.getBoundingBox());
+
+			//mDebug() << "before expand BB=" << bb.toRangeString();
+			bb.expand(OFFSET_FACTOR);  // 大きさをOFFSET_FACTOR分だけ拡大する。
+			mDebug() << "Applied BB=" << bb.toRangeString();
+			double *bd = bb.range().data();
+
+			auto sample = vtkSmartPointer<vtkSampleFunction>::New();
+			//sample->SetImplicitFunction(functionMap_.at(*it));
+			sample->SetImplicitFunction(auxPlaneInfo_.cutImplicitFunction(functionMap_.at(cellName)));
+
+			sample->SetModelBounds(bd);
+			sample->ComputeNormalsOff();
+			//sample->SetModelBounds(-bound, bound, -bound, bound, -bound, bound);
+			/*
+			 *  sample値のサイズは8バイトでsample要素数が多すぎるとメモリの割当に失敗する。
+			 * 割当失敗時の挙動はvtkのビルドモードによって血が手
+			 * "VTKが" デバッグビルドならabort()で終了
+			 * "VTKが" リリースビルドならbad_allocが投げられる。
+			 *
+			 * 外部ライブラリのビルドモードによって挙動が変わるのは避けたい。
+			 * ・調べられる環境では空きメモリ量を調べて対応
+			 * ・そうでない環境もあるのでVTKがreleaseであることを期待してtrycatchする。
+			 */
+
+			/* 接合面をきれいに描画するにはサンプリング密度一定でやるべきだが、
+			 * それだと小さい部品の描画が不完全になりがちなので、小さいセルは少しサンプリングを上げて、
+			 *大きいセルは少しサンプリング密度を低めに補正する。
+			 * NOTE 軸平行ではない小セルはBoundingBoxが大きいので補正がかからないという問題はある。
+			 */
+			std::array<double, 3> dim {rate*(bd[1] - bd[0]), rate*(bd[3] - bd[2]), rate*(bd[5] - bd[4])};
+			double boxVolume = (bd[1] - bd[0])*(bd[3] - bd[2])*(bd[5] - bd[4]);
+			double sizeCollectionFactor = 1.0 + 1.0/std::sqrt(0.01+0.05*boxVolume);
+			for(auto &elem: dim) elem *= sizeCollectionFactor;
+
+			// NOTE vtk setsampleDimensionsの内部でのvalueTypeをpublicに知ることはできないだろうか？
+			unsigned long requiredMemMB = dim[0]*dim[1]*dim[2]*SAMPLE_ELEMENT_SIZE_BYTE/1048576;
+			mDebug() << "Memory: free(MB) =" << utils::getFreeMemMB() << "required=" << requiredMemMB;
+			if(requiredMemMB > 0.7*utils::getFreeMemMB() && utils::getFreeMemMB() > 0) {
+				double reductionFactor = 0.7*utils::getFreeMemMB()/requiredMemMB;
+				mWarning() << "There is not enough free memory, required = "
+						   << requiredMemMB << ", available =" << utils::getFreeMemMB()
+						   << ".\n  resolution degenerated from(" << dim[0] << dim[1] << dim[2] << ") to"
+                           << "(" << dim[0]*reductionFactor << dim[1]*reductionFactor << dim[2]*reductionFactor << ")";
+                for(auto &elem: dim) elem *= reductionFactor;
+			}
+
+			try {
+				sample->SetSampleDimensions(dim[0], dim[1], dim[2]);
+				mDebug() << "samplerates=" << dim[0] << dim[1] << dim[2];
+				sample->Update();
+			} catch (std::bad_alloc &ba) {
+                (void) ba;
+				m2Fatal(" Memory allocation failed. Too much sampling point for cell =", *it);
+			}
+
+			// contour
+			auto surface = vtkSmartPointer<vtkContourFilter>::New();
+			surface->SetInputConnection(sample->GetOutputPort());
+			surface->SetValue(0, 0.0);
+			surface->Update();
+
+			// ## ここまでをできれば別プロセスで実行したい
+
+
+			// mapper
+			auto polyData = vtkSmartPointer<vtkPolyData>::New();
+			polyData->DeepCopy(surface->GetOutput());
+			auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+			mapper->SetInputData(polyData);
+
+			// ここまでが重い処理。
+
+			/*// edgeを描画するならこれ。このばあいワイヤーフレーム描画になる。→ならない
+			auto edge = vtkSmartPointer<vtkFeatureEdges>::New();
+			edge->SetInputData(polyData);
+			edge->Update();
+			mapper->SetInputData(edge->GetOutput());
+			*/
+
+
+			//surface->GetOutput()はpolyDataを返す。一々ディープコピーでVtkPolyDataに保存しなくても直接mapperに渡してもいい？
+			// なんかパフォーマンス落ちる気がする。どうせsurface->updateのコストに比べれば微々たるもの。
+//			auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+//			mapper->SetInputData(surface->GetOutput());
+
+			mapper->ScalarVisibilityOff();
+			// actor
+			auto actor = vtkSmartPointer<vtkActor>::New();
+			actor->SetMapper(mapper);
+			actorMap_[*it] = std::make_pair(actor, rate);
+			targetActor = actor;
+		}
+
+
+		QApplication::processEvents();
+		// ここまででtargetActor作成完了。セル名は*it
+
+		auto palette = simulation_->getGeometry()->palette();
+		auto color = palette.getColorByIndex(palette.getIndexByCellName(*it));
+        mDebug() << "cell=" << *it << "index=" << palette.getIndexByCellName(*it)
+                 << "rgb=" << color.r << color.g << color.b;
+		targetActor->GetProperty()->SetColor(static_cast<double>(color.r)/255, static_cast<double>(color.g)/255, static_cast<double>(color.b)/255);
+		currentRenderer_->AddActor(targetActor);
+		displayedCellNames_.insert(*it);
+
+		progress.setValue(++numRenderedCell);
+		if (progress.wasCanceled()) break;
+	}
+	progress.setValue(addingCellNames_.size());
+
+
+
+
+
+
+
+	// 補助平面のアクター追加
+	auto bb = geom::BoundingBox(currentSamplingRange_);
+	bb.expand(2);
+	for(auto actor: auxPlaneInfo_.createActors(bb)) {
+		currentRenderer_->AddActor(actor);
+	}
+	// axisArrowのActor作成コストはしれているのでgeometry アップデート時はとりあえずarrowも更新する。
+	this->updateArrow();
+
+
+
+	// 初回のみの処理
+	if(isFirstCall_){
+        currentRenderer_->SetBackground(.2, .3, .4);
+        CameraInfo::setToCamera(DEFAULT_CAMERA, currentRenderer_->GetActiveCamera());
+		qvtkWidget_->GetRenderWindow()->AddRenderer(currentRenderer_);
+    }
+	if(cameraInfo_.hasData && !isFirstCall_) {
+        //qDebug() << "restore from previous camera=" << cameraInfo_.toQString();
+        CameraInfo::setToCamera(cameraInfo_, currentRenderer_->GetActiveCamera());
+    }
+
+
+    qvtkWidget_->GetRenderWindow()->Render();
+	// updateが終了後処理
+	isFirstCall_ = false;
+	addingCellNames_.clear();
+	removingCellNames_.clear();
+}
+
+void GeometryViewer::saveCameraState()
+{
+	// まだ一度も描画していない場合camera位置はまだ不定であるという問題があう。
+	if(currentRenderer_->IsActiveCameraCreated() == 1) {
+		cameraInfo_ = CameraInfo::getFromCamera(currentRenderer_->GetActiveCamera());
+		//qDebug() << "recorded current camera =" << QString::fromStdString(cameraInfo_.toString());
+	}
+}
+
+void GeometryViewer::restoreDefaultCamera()
+{
+    cameraInfo_ = DEFAULT_CAMERA;
+    //qDebug() << "restore from default camera=" << cameraInfo_.toQString();
+    //QTimer::singleShot(0, this, SLOT(updateView()));
+    //updateView();
+    CameraInfo::setToCamera(cameraInfo_, currentRenderer_->GetActiveCamera());
+    qvtkWidget_->GetRenderWindow()->Render();
+    // ズームしてからこれを呼ぶと何故かevent発生まで暗いまま
+}
+
+
+// Axis Arrowの設定をするwidgetを有効/無効化する
+void GeometryViewer::setEnableArrowConfig(bool state)
+{
+	if(!ui->checkBoxFitArrowToRenderingRegion->isChecked()) {
+		ui->labelArrowLength->setEnabled(state);
+		ui->doubleSpinBoxArrowLength->setEnabled(state);
+	}
+	ui->doubleSpinBoxHeadRadius->setEnabled(state);
+	ui->labelArrowHeadRadius->setEnabled(state);
+	ui->checkBoxFitArrowToRenderingRegion->setEnabled(state);
+}
+
+void GeometryViewer::updateArrow()
+{
+	if(ui->checkBoxShowAxisArrow->isChecked()) {
+		bool hasSetValue = false;
+		auto lenArr = std::array<double, 3>{0, 0, 0};
+		if(ui->checkBoxFitArrowToRenderingRegion->isChecked()) {
+			// fitさせる場合は中心を原点において座標軸負の部分も描画する。
+			std::array<double, 6> arr;
+			hasSetValue = getRenderingRangeInput(true, &arr);
+			// NOTE negative部分は描画できないのでいつか改善したい
+			arr[0] = arr[2] = arr[4] = 0;
+			lenArr = decltype(lenArr){arr[1] - arr[0], arr[3] - arr[2], arr[5] - arr[4]};
+		} else {
+			auto len = ui->doubleSpinBoxArrowLength->value();
+			lenArr = decltype(lenArr){len, len, len};
+			hasSetValue = true;
+		}
+		if(hasSetValue) {
+			currentRenderer_->RemoveActor(axesActor_);
+			// 矢印長さが負の場合描画領域にフィットさせない(AxesArrowActorでは負の側を向いた矢印ができない)
+			if(lenArr[0] < 0 || lenArr[1] < 0 || lenArr[2] < 0) {
+				auto len = ui->doubleSpinBoxArrowLength->value();
+				lenArr = decltype(lenArr){len, len, len};
+				ui->checkBoxFitArrowToRenderingRegion->setChecked(false);
+			}
+			axesActor_->SetTotalLength(lenArr[0], lenArr[1], lenArr[2]);
+			axesActor_->SetConeRadius(ui->doubleSpinBoxHeadRadius->value());
+			axesActor_->SetScale(-100, 50, 25);
+
+			currentRenderer_->AddActor(axesActor_);
+		}
+	} else {
+		currentRenderer_->RemoveActor(axesActor_);
+	}
+	// 再描画しないとarrowの表示は更新されない
+	qvtkWidget_->GetRenderWindow()->Render();
+}
+
+
+
+

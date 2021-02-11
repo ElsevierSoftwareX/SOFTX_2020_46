@@ -1,0 +1,208 @@
+#include "logicalpolynomial.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <sstream>
+
+#include "../../geometry/cell/boundingbox.hpp"
+#include "../../utils/message.hpp"
+#include "../../utils/string_utils.hpp"
+#include "../../utils/container_utils.hpp"
+#include "../formula_utils.hpp"
+
+lg::Polynomial::Polynomial(const std::vector<lg::Term> &terms)
+	:terms_(terms)
+{
+	// opeartor==ではtoStringの比較をしている。
+	// 安定的に文字列化するために常にsortする。
+	// 基準は因子数。因子数の小さい項を前に表示
+	std::stable_sort(terms_.begin(), terms_.end());
+}
+
+std::string lg::Polynomial::toString(const std::string &prefix, const std::string &suffix,
+									 const std::unordered_map<std::string, lg::Term::factor_type> &convMap) const
+{
+	std::stringstream ss;
+	ss << "(";
+	for(size_t i = 0 ; i < terms_.size(); ++i) {
+		ss << suffix << terms_.at(i).toString(convMap) << prefix;
+		if(i != terms_.size()-1) ss << OP_ADD;
+	}
+	ss << ")";
+	return ss.str();
+}
+
+std::string lg::Polynomial::toString(const std::unordered_map<std::string, lg::Term::factor_type> &convMap) const
+{
+	std::stringstream ss;
+	ss << "(";
+	for(size_t i = 0 ; i < terms_.size(); ++i) {
+		ss << terms_.at(i).toString(convMap);
+		if(i != terms_.size()-1) ss << OP_ADD;
+	}
+	ss << ")";
+	return ss.str();
+}
+
+std::vector<lg::Term::factor_type> lg::Polynomial::uniqueFactors() const
+{
+	using ftype = lg::Term::factor_type;
+	mDebug() << "Enter lg::Polynomial::uniqueFactors";
+	if(terms_.empty()) return std::vector<Term::factor_type>();
+	std::vector<lg::Term::factor_type> retVec;
+	for(auto &term: terms_) {
+		retVec = utils::makeConcatVector(retVec, term.uniqueFactors());
+	}
+
+	// 同値を削除
+	// 絶対値でソートしてからuniqueで削除 基準を2乗値にすることで表裏両面の片方を削除できる。
+	mDebug() << "before retVec=" << retVec;
+	std::sort(retVec.begin(), retVec.end(),
+			  [](const ftype& f1, const ftype &f2){
+				if(f1*f1 == f2*f2){
+					return f1 > f2;
+				} else {
+					return f1*f1 > f2*f2;
+				}});
+	retVec.erase(std::unique(retVec.begin(), retVec.end(), [](const ftype &f1, const ftype &f2){return f1*f1 == f2*f2;}), retVec.end());
+
+	mDebug() << "after retVec=" << retVec;
+
+//	// 表裏両方ある場合も片方(裏面)削除
+//// FIXME ここのループが終わらない場合がある。
+//	mDebug() << "retVec=" << retVec;
+
+//mDebug() <<  "ENTER infinit loop!!!!!!!!!!!!!!!";
+
+
+//	if(retVec.size() == 1) return retVec;
+//	for(auto it = retVec.begin(); it != retVec.end()-1; ++it) {
+//		mDebug() << "it=" << *it << ", retVec in loop=" << retVec;
+
+//		auto delit = std::find_if(it+1, retVec.end(), [&it](Term::factor_type fac) {
+//															return (*it)*(*it) == fac*fac;
+//														});
+//		if(delit != retVec.end()) retVec.erase(delit);
+
+//	}
+
+
+//mDebug() << __LINE__ << "EXIT loop!!!!!!!!!!!!!!!!!";
+
+	return retVec;
+}
+
+lg::Polynomial lg::Polynomial::compliment() const
+{
+//	mDebug() << "現在の多項式群=";
+//	for(auto &term: terms_) {
+//		mDebug() << "term=" << term.toString();
+//	}
+	// ド・モルガンの法則で多項式は 各項の否定の積 になり、結果は単項式
+	Term newTerm;
+	for(auto &term: terms_) {
+		auto addingTerm = term.compliment();
+		newTerm = newTerm * addingTerm;
+	}
+	return Polynomial(newTerm);
+}
+
+bool lg::Polynomial::evaluate(const std::function<bool(lg::Term::factor_type)> &func) const
+{
+	if(terms_.empty()) throw std::invalid_argument("empty polynomial");
+	// 論理和は1つでもtrueがあるとtrue
+	for(auto &term: terms_) {
+		if(term.evaluate(func)) return true;
+	}
+	return false;
+}
+
+
+lg::Polynomial lg::Polynomial::fromString(const std::string &equation,
+											 const std::unordered_map<std::string, Term::factor_type> &convMap)
+{
+	std::string eqstr = equation;
+	// 冗長な空白と一番外側の冗長な括弧は取る。
+	utils::removeRedundantBracket('(', ')', &eqstr, true);
+	formula::checkValidEquation(eqstr, std::string{OP_ADD, OP_MUL});
+	/*
+	 * 文字列から多項式を生成する場合、
+	 * まず文字列を各項ごとに切り出す。
+	 *
+	 * まず括弧内に入らない一番外側の論理和演算記号で分割すれば
+	 * それぞれが項(Term)になる。項内の多項式(polynominal)はTermクラスの方で生成する。
+	 */
+	// 和演算は積よりも優先度が低いので括弧外の和演算子の区切りは必ず項の区切りになる。
+	std::vector<std::string> termStrings = formula::splitOutmost(eqstr, '(', ')', OP_ADD, false);
+
+	//mDebug() << "分解された各項=" << termStrings;
+
+	std::vector<Term> terms;
+	for(auto &str: termStrings) {
+		terms.emplace_back(Term::fromString(str, convMap));
+	}
+	//mDebug() << "string=" << equation << "の各項は=" << terms;
+	return Polynomial(terms);
+}
+
+
+
+
+bool lg::operator ==(const lg::Polynomial &p1, const lg::Polynomial &p2) {
+	// NOTE 文字列化して等号などという比較なので、おおよそまともな目的に使ってはならない
+	return p1.toString() == p2.toString();
+}
+
+lg::Polynomial lg::operator +(const lg::Polynomial &p1, const lg::Polynomial &p2)
+{
+	Polynomial p;
+	p.terms_ = utils::makeConcatVector(p1.terms_, p2.terms_);
+	return p;
+}
+
+
+geom::BoundingBox lg::Polynomial::createBoundingBox(const geom::SurfaceMap &smap) const
+{
+	// 論理多項式ツリーを辿りながらBoundingBoxを作成する。
+	if(terms_.empty()) throw std::invalid_argument("In createBoundingBox, polynomial term is empty");
+
+	geom::BoundingBox bbox = terms_.at(0).generateBoundingBox(smap);
+	if(terms_.size() == 1) return bbox;
+	// 論理多項式の項が2個以上の場合 BoundingBoxの和を取る。
+	for(size_t i = 1; i < terms_.size(); ++i) {
+		bbox = geom::BoundingBox::OR(bbox, terms_.at(i).generateBoundingBox(smap));
+	}
+	return bbox;
+}
+
+
+#ifdef ENABLE_GUI
+#include <vtkSphere.h>
+#include <vtkImplicitBoolean.h>
+#include "../../geometry/surface/surfacemap.hpp"
+vtkSmartPointer<vtkImplicitFunction> lg::Polynomial::createImplicitFunction(const geom::SurfaceMap &smap) const
+{
+	/*
+	 * 論理多項式ツリーを辿りながらvtkImplicitFunctionを作成する。
+	 */
+	if(terms_.empty()) throw std::invalid_argument("In generateImplicitFunction(), polynomial term is empty");
+
+	// ※vtkImplicitFunctionはpure virtualなのでNew()できないことに留意
+	vtkSmartPointer<vtkImplicitFunction> lhs = terms_.at(0).generateImplicitFunction(smap);
+	// 多項式の項が1個ならそのままリターン
+	if(terms_.size() == 1) return lhs;
+
+	// 論理多項式の項が2個以上の場合
+	auto bop = vtkSmartPointer<vtkImplicitBoolean>::New();
+	bop->AddFunction(lhs);
+
+	for(size_t i = 1; i < terms_.size(); ++i) {
+		vtkSmartPointer<vtkImplicitFunction> rhs = terms_.at(i).generateImplicitFunction(smap);
+		bop->AddFunction(rhs);
+	}
+	bop->SetOperationTypeToUnion();
+	return bop;
+}
+#endif
+
+
